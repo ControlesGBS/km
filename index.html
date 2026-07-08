@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GBS · Registros de KM Rodado</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#f4f8f4; --surface:#ffffff; --ink:#1a2a1a; --muted:#4a7a4a; --faint:#7a9a7a;
+    --line:#c0dcc0; --brand:#2d7a2d; --brand-d:#1a4a1a; --brand-soft:#eaf3de;
+    --limit:#a32d2d;
+    --radius:14px; --shadow:0 1px 2px rgba(20,40,20,.05), 0 8px 24px rgba(20,40,20,.05);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Hanken Grotesk",sans-serif;font-size:15px;line-height:1.55;display:flex;flex-direction:column;min-height:100vh}
+  h1,h2,h3,.disp{font-family:"Bricolage Grotesque",sans-serif;font-weight:600;letter-spacing:-.01em;margin:0}
+  button{font-family:inherit;cursor:pointer}
+  .muted{color:var(--muted)}
+
+  .hdr{background:var(--brand-d);color:#fff;padding:0 20px;height:56px;display:flex;align-items:center;gap:12px}
+  .hdr-logo{width:28px;height:28px;flex-shrink:0;border-radius:6px;overflow:hidden}
+  .hdr-logo img{width:100%;height:100%;object-fit:contain}
+  .hdr-home{color:#c8e8c8;text-decoration:none;font-size:18px;line-height:1}
+  .hdr-title{font-size:15px;font-weight:500;color:#c8e8c8;flex:1;text-align:center}
+  .hdr-user{font-size:12px;color:#90c090}
+  .btn-sair{background:none;border:1px solid #4a7a4a;color:#c8e8c8;padding:5px 14px;border-radius:5px;cursor:pointer;font-size:12px;font-family:inherit}
+
+  .nav{background:var(--brand-d);display:flex;gap:6px;padding:0 16px;height:38px;align-items:center}
+  .nav button{background:none;border:none;color:#a8d8a8;padding:7px 14px;border-radius:6px 6px 0 0;font-size:13px;cursor:pointer;font-family:inherit}
+  .nav button.ativo{background:var(--bg);color:var(--brand-d);font-weight:600}
+
+  .pag{display:none}
+  .pag.ativo{display:block}
+  #pag-painel.ativo{display:flex;flex-direction:column;flex:1}
+  .wrap{max-width:1080px;width:100%;margin:0 auto;padding:24px 22px 40px;flex:1}
+  .scroll-area{padding-bottom:24px}
+
+  .uploader{background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);padding:20px 22px;
+    display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:14px}
+  .uploader.on{border-color:var(--brand);background:var(--brand-soft)}
+  .up-info{font-size:13px;color:var(--muted)}
+  .up-status{font-size:13.5px;color:var(--ink);margin-top:4px}
+  .up-status b{font-weight:600}
+  .btn-pick{width:auto;padding:0 20px;height:46px;border:none;border-radius:11px;background:var(--brand);color:#fff;font-size:15px;font-weight:600}
+
+  .filters{display:flex;flex-wrap:wrap;gap:16px 22px;align-items:center;margin-bottom:20px}
+  .fg{display:flex;align-items:center;gap:8px}
+  .fg>span{font-size:13px;color:var(--muted)}
+  select,input[type=date],input[type=time],input[type=search]{height:38px;padding:0 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);
+    font-family:inherit;font-size:14px;color:var(--ink);outline:none}
+  select:focus,input:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:20px}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:15px 17px;box-shadow:var(--shadow);text-align:center}
+  .kpi .lbl{font-size:12.5px;color:var(--muted);margin-bottom:5px}
+  .kpi .val{font-family:"Bricolage Grotesque";font-weight:600;font-size:27px;letter-spacing:-.02em;color:var(--brand-d)}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow);margin-bottom:22px}
+  .card h3{font-size:16px;margin-bottom:2px}
+  .card .sub{font-size:12.5px;color:var(--muted);margin:0 0 14px}
+  .chart-wrap{position:relative;width:100%}
+
+  .aviso{border-radius:var(--radius);padding:12px 16px;font-size:13px;margin-bottom:16px}
+  .aviso.critico{background:#fde8e8;border:1px solid #f5b0b0;color:#a32d2d}
+  .aviso.leve{background:#fef3c7;border:1px solid #f5d98a;color:#92400e}
+  .aviso summary{cursor:pointer;font-weight:600}
+  .aviso ul{margin:8px 0 0 18px;padding:0}
+  .aviso li{margin-bottom:4px}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{background:var(--brand-d);color:#c0e8c0;padding:8px 10px;text-align:left;font-size:12px;font-weight:500}
+  tbody td{padding:6px 10px;border-bottom:1px solid var(--line)}
+  tbody tr:nth-child(even){background:#f8fbf8}
+  .twrap{border-radius:10px;border:1px solid var(--line);overflow:auto;max-height:420px}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-logo"><img src="logo-gbs.png" alt="GBS" onerror="this.style.display='none'"></div>
+  <a class="hdr-home" href="/controles" title="Início">🏠</a>
+  <div class="hdr-title">REGISTROS DE KM RODADO</div>
+  <span class="hdr-user" id="hdr-user"></span>
+  <button class="btn-sair" onclick="sair()">Sair</button>
+</div>
+<div class="nav" id="nav">
+  <button class="ativo" onclick="irPag('painel',this)">Painel</button>
+</div>
+
+<div class="wrap">
+
+  <div class="pag ativo" id="pag-painel">
+    <div id="dash" style="display:none">
+      <div class="topo-fixo">
+        <div class="filters">
+          <div class="fg" id="fgBase"><span>Base</span><select id="selBase"></select></div>
+          <div class="fg"><span>Mês</span><select id="selMes"></select></div>
+          <div class="fg"><span>Data</span>
+            <select id="selModoData">
+              <option value="todas">Todas as datas</option>
+              <option value="personalizar">Personalizar</option>
+            </select>
+          </div>
+          <div class="fg" id="fgDataPersonalizada" style="display:none"><input type="date" id="dataPersonalizada"></div>
+          <div class="fg"><span>Horário</span><input type="time" id="horaDe" value="00:00"><span>até</span><input type="time" id="horaAte" value="23:59"></div>
+          <div class="fg"><span>Leiturista</span><select id="selLeiturista"><option value="">Todos</option></select></div>
+          <div class="fg"><span>Buscar</span><input type="search" id="busca" placeholder="placa ou nome..."></div>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi"><div class="lbl">KM Rodado (total)</div><div class="val" id="kTotal">—</div></div>
+          <div class="kpi"><div class="lbl">Veículos no filtro</div><div class="val" id="kVeiculos">—</div></div>
+          <div class="kpi"><div class="lbl">Média por veículo</div><div class="val" id="kMedia">—</div></div>
+          <div class="kpi"><div class="lbl">Registros</div><div class="val" id="kRegistros">—</div></div>
+        </div>
+      </div>
+
+      <div class="scroll-area">
+        <details class="aviso critico" id="avisoInvalidados" style="display:none">
+          <summary></summary>
+          <ul id="avisoInvalidadosLista"></ul>
+        </details>
+        <details class="aviso leve" id="avisoOutliers" style="display:none">
+          <summary></summary>
+          <div class="twrap" style="margin-top:8px;max-height:260px">
+            <table>
+              <thead><tr><th>Placa</th><th>Data</th><th>Hora</th><th>KM Inicial</th><th>KM Final</th><th>Motivo</th></tr></thead>
+              <tbody id="avisoOutliersBody"></tbody>
+            </table>
+          </div>
+        </details>
+
+        <div class="card">
+          <h3>KM Rodado por Veículo</h3>
+          <p class="sub">Clique numa barra para ver o detalhe diário daquele veículo.</p>
+          <div class="chart-wrap" id="rankWrap"><canvas id="rank"></canvas></div>
+        </div>
+
+        <div class="card" id="cardDetalhe" style="display:none">
+          <h3 id="detTitle">Detalhe diário</h3>
+          <div class="twrap">
+            <table>
+              <thead><tr><th>Data</th><th>KM do dia</th></tr></thead>
+              <tbody id="detBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="semDados" class="up-status" style="text-align:center;padding:40px 0"></div>
+  </div>
+
+  <div class="pag" id="pag-admin">
+    <div class="uploader" id="dropCadastro">
+      <div>
+        <div style="font-weight:600">Cadastro de Veículos (.xlsx)</div>
+        <div class="up-info">Suba a planilha "InoPrime Veículos" (Placa/Condutor/Tipo/Grupo/Marca). Substitui o cadastro inteiro. Suba de novo sempre que trocar condutor ou placa de algum veículo.</div>
+        <div class="up-status" id="statusCadastro"></div>
+      </div>
+      <div>
+        <input type="file" id="fileCadastro" accept=".xlsx" style="display:none">
+        <button class="btn-pick" id="pickCadastro">Selecionar arquivo</button>
+      </div>
+    </div>
+
+    <div class="uploader" id="dropKm">
+      <div>
+        <div style="font-weight:600">Relatório de KM Rodado (.xls/.xlsx)</div>
+        <div class="up-info">Suba o export do rastreador. Reenviar o mesmo mês substitui os dados anteriores.</div>
+        <div class="up-status" id="statusKm"></div>
+      </div>
+      <div>
+        <input type="file" id="fileKm" accept=".xls,.xlsx" style="display:none">
+        <button class="btn-pick" id="pickKm">Selecionar arquivo</button>
+      </div>
+    </div>
+
+    <div class="uploader" style="display:block">
+      <div style="font-weight:600;margin-bottom:6px">Meses já cadastrados no banco</div>
+      <div id="mesesCadastrados" class="up-info">Carregando…</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SUPABASE_URL='https://ndwivbhqglpnfyqwjbzu.supabase.co';
+const SUPABASE_KEY='sb_publishable_IhuNziyT5VYrMKRixcPGjA_LAn5ku-7';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const $=(id)=>document.getElementById(id);
+
+let PERFIL_BASE=null, PERFIL_TIPO=null, USUARIO_NOME=null;
+const TST_BASES={
+  'tst_passos':['Guaxupé','Passos','SSP'],
+  'tst_pouso_alegre':['Pouso Alegre','Alfenas','Ouro Fino','Andradas']
+};
+const PODE_ADMIN=()=>['gestor','gestor1','supervisor_geral'].includes(PERFIL_TIPO);
+
+function normBase(s){
+  const semAcento=(s||'').toString().normalize('NFD').split('').filter(c=>{
+    const code=c.charCodeAt(0);
+    return code<0x300||code>0x36f; // remove marcas de acento (combining diacritical marks)
+  }).join('');
+  return semAcento.trim().toLowerCase();
+}
+
+function irPag(id,btn){
+  document.querySelectorAll('.pag').forEach(p=>p.classList.remove('ativo'));
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('ativo'));
+  document.getElementById('pag-'+id).classList.add('ativo');
+  btn.classList.add('ativo');
+}
+async function sair(){await sb.auth.signOut();location.href='https://gbsservicos.com';}
+
+async function registrarUploadSupabase(tipo){
+  await sb.from('uploads_log').upsert({tipo,atualizado_em:new Date().toISOString(),atualizado_por:USUARIO_NOME||'—'});
+}
+
+// ── VALIDAÇÃO DE KM ────────────────────────────────────────────────
+const LIMIAR_KM_SUSPEITO=1000; // km numa única viagem/registro acima disso é quase certamente erro de sensor/GPS
+const ODOMETRO_MAX=100000; // km — quando o odômetro passa disso, o rastreador volta a contar do zero
+const TOLERANCIA_BACKWARD_LEVE=3; // km — diferença até esse valor é só arredondamento de GPS, mantém o registro com 0 km
+
+function avaliarViagem(kmInicial,kmFinal){
+  if(kmFinal<kmInicial){
+    const pareceRollover=kmInicial>=ODOMETRO_MAX*0.95 && kmFinal<=ODOMETRO_MAX*0.05;
+    if(pareceRollover) return {valido:true,kmRodado:(ODOMETRO_MAX-kmInicial)+kmFinal};
+    const diferenca=kmInicial-kmFinal;
+    if(diferenca<=TOLERANCIA_BACKWARD_LEVE) return {valido:true,kmRodado:0};
+    return {valido:false,tipo:'backward',motivo:`KM Inicial (${kmInicial.toLocaleString('pt-BR')}) maior que KM Final (${kmFinal.toLocaleString('pt-BR')})`};
+  }
+  const kmRodado=kmFinal-kmInicial;
+  if(kmRodado>LIMIAR_KM_SUSPEITO) return {valido:false,tipo:'alto',motivo:`KM Rodado (${kmRodado.toLocaleString('pt-BR')}) muito alto para um único registro`};
+  return {valido:true,kmRodado};
+}
+
+function processarLinhasKm(rows){
+  const brutoPorVeiculo={};
+  let veiculoAtual=null;
+  for(let i=1;i<rows.length;i++){
+    const row=rows[i];
+    if(!row||row.length<9) continue;
+    const placaRaw=row[0]!=null?String(row[0]).trim():'';
+    if(placaRaw) veiculoAtual=placaRaw.toUpperCase();
+    if(!veiculoAtual) continue;
+    const dataInicio=row[2]!=null?String(row[2]).trim():null;
+    const horaInicio=row[3]!=null?String(row[3]).trim():null;
+    const kmInicial=parseFloat(row[4]);
+    const kmFinal=parseFloat(row[5]);
+    if(!dataInicio||!horaInicio||isNaN(kmInicial)||isNaN(kmFinal)) continue;
+    if(!brutoPorVeiculo[veiculoAtual]) brutoPorVeiculo[veiculoAtual]=[];
+    brutoPorVeiculo[veiculoAtual].push({dataInicio,horaInicio,kmInicial,kmFinal});
+  }
+
+  const validos=[], outliers=[], invalidados=[];
+  for(const [placa,linhas] of Object.entries(brutoPorVeiculo)){
+    const avaliadas=linhas.map(l=>Object.assign({},l,avaliarViagem(l.kmInicial,l.kmFinal)));
+    const invalidas=avaliadas.filter(a=>!a.valido);
+    const qtdBackward=invalidas.filter(a=>a.tipo==='backward').length;
+    const qtdAlto=invalidas.filter(a=>a.tipo==='alto').length;
+    const todoInvalido=invalidas.length===avaliadas.length;
+
+    if(qtdBackward>1||qtdAlto>1||todoInvalido){
+      let motivo;
+      if(qtdBackward>1) motivo=`${qtdBackward} leitura(s) de odômetro voltando pra trás sem ser volta de odômetro (${ODOMETRO_MAX.toLocaleString('pt-BR')} km)`;
+      else if(qtdAlto>1) motivo=`${qtdAlto} registro(s) com KM muito acima do normal`;
+      else motivo=`todos os ${avaliadas.length} registro(s) do período têm leitura de odômetro inconsistente`;
+      invalidados.push({placa,totalRegistros:avaliadas.length,registrosInconsistentes:invalidas.length,motivo});
+      continue;
+    }
+
+    avaliadas.forEach(a=>{
+      if(!a.valido){
+        outliers.push({placa,data:a.dataInicio,horaInicio:a.horaInicio,kmInicial:a.kmInicial,kmFinal:a.kmFinal,motivo:a.motivo});
+      } else {
+        validos.push({placa,data:converterDataBR(a.dataInicio),hora_inicio:a.horaInicio,km_inicial:a.kmInicial,km_final:a.kmFinal,km_rodado:a.kmRodado});
+      }
+    });
+  }
+  return {validos,outliers,invalidados};
+}
+
+function converterDataBR(dmy){
+  const [d,m,a]=dmy.split('/');
+  return `${a}-${m}-${d}`;
+}
+
+// ── CADASTRO DE VEÍCULOS ────────────────────────────────────────────
+let veiculos={}; // {PLACA:{condutor,tipo,base,marca}}
+
+async function carregarVeiculos(){
+  const {data}=await sb.from('veiculos').select('placa,condutor,tipo,base,marca');
+  veiculos={};
+  (data||[]).forEach(v=>{veiculos[v.placa]=v;});
+}
+
+function nomeExibicao(placa){
+  const c=veiculos[placa]?.condutor;
+  return c?`${placa} — ${c}`:placa;
+}
+
+// ── DADOS DO PAINEL ─────────────────────────────────────────────────
+let registros=[]; // {placa,base,data,horaMin,kmRodado} do mês selecionado, já filtrado por perfil
+let exclusoesInvalidados=[], exclusoesIndividuais=[];
+let mesSel=null;
+let modoData='todas', dataPersonalizada=null, baseSel='', leiturSel='', buscaTxt='';
+let selVeiculo=null;
+let rankChart=null;
+
+function horaParaMin(hhmmss){ const p=hhmmss.split(':').map(Number); return (p[0]||0)*60+(p[1]||0); }
+function dentroDoIntervalo(min,de,ate){ if(de<=ate) return min>=de&&min<=ate; return min>=de||min<=ate; }
+
+const valueLabels={id:'valueLabels',afterDatasetsDraw(chart){
+  const ctx=chart.ctx,meta=chart.getDatasetMeta(0);
+  ctx.save();ctx.font='600 11px "Hanken Grotesk",sans-serif';ctx.fillStyle='#1a4a1a';ctx.textBaseline='middle';
+  meta.data.forEach((bar,i)=>{const v=chart.data.datasets[0].data[i];if(v==null)return;
+    ctx.fillText(v.toLocaleString('pt-BR')+' km',bar.x+6,bar.y);});
+  ctx.restore();
+}};
+
+async function carregarRegistrosDoMes(mesRef){
+  const LOTE=1000;
+  let {count}=await sb.from('registros_km').select('*',{count:'exact',head:true}).eq('mes_ref',mesRef);
+  const totalPaginas=Math.max(1,Math.ceil((count||0)/LOTE));
+  const paginas=await Promise.all(Array.from({length:totalPaginas},(_,i)=>
+    sb.from('registros_km').select('placa,base,data,hora_inicio,km_rodado').eq('mes_ref',mesRef).range(i*LOTE,i*LOTE+LOTE-1)
+  ));
+  return paginas.flatMap(p=>p.data||[]);
+}
+
+async function carregarExclusoesDoMes(mesRef){
+  const {data}=await sb.from('registros_km_exclusoes').select('*').eq('mes_ref',mesRef);
+  return data||[];
+}
+
+function restringePorPerfil(lista){
+  if(PERFIL_BASE){
+    const alvo=normBase(PERFIL_BASE);
+    return lista.filter(r=>normBase(r.base)===alvo);
+  }
+  if(['tst_passos','tst_pouso_alegre'].includes(PERFIL_TIPO)){
+    const alvos=(TST_BASES[PERFIL_TIPO]||[]).map(normBase);
+    return lista.filter(r=>alvos.includes(normBase(r.base)));
+  }
+  return lista;
+}
+
+async function selecionarMes(mesRef){
+  mesSel=mesRef;
+  const [brutos,exclusoes]=await Promise.all([carregarRegistrosDoMes(mesRef),carregarExclusoesDoMes(mesRef)]);
+  registros=restringePorPerfil(brutos.map(r=>({placa:r.placa,base:r.base,data:r.data,horaMin:horaParaMin(r.hora_inicio),kmRodado:Number(r.km_rodado)})));
+  const exclusoesFiltradas=restringePorPerfil(exclusoes);
+  exclusoesInvalidados=exclusoesFiltradas.filter(e=>e.tipo==='veiculo_invalidado');
+  exclusoesIndividuais=exclusoesFiltradas.filter(e=>e.tipo==='registro_individual');
+
+  selVeiculo=null;
+  $('cardDetalhe').style.display='none';
+  construirFiltros();
+  renderAvisos();
+  render();
+}
+
+function construirFiltros(){
+  if(PERFIL_BASE){
+    $('fgBase').style.display='none';
+  } else if(['tst_passos','tst_pouso_alegre'].includes(PERFIL_TIPO)){
+    const basesTst=TST_BASES[PERFIL_TIPO]||[];
+    $('selBase').innerHTML='<option value="">Todas as minhas bases</option>'+basesTst.map(b=>`<option value="${b}">${b}</option>`).join('');
+    baseSel='';
+  } else {
+    const bases=[...new Set(registros.map(r=>r.base).filter(Boolean))].sort();
+    $('selBase').innerHTML='<option value="">Todas as bases</option>'+bases.map(b=>`<option value="${b}">${b}</option>`).join('');
+    baseSel='';
+  }
+
+  const dias=[...new Set(registros.map(r=>r.data))].sort();
+  if(dias.length){
+    $('dataPersonalizada').min=dias[0]; $('dataPersonalizada').max=dias[dias.length-1];
+    if(!dataPersonalizada || dataPersonalizada<dias[0] || dataPersonalizada>dias[dias.length-1]) dataPersonalizada=dias[dias.length-1];
+    $('dataPersonalizada').value=dataPersonalizada;
+  }
+
+  const condutores=[...new Set(registros.map(r=>veiculos[r.placa]?.condutor).filter(Boolean))].sort();
+  $('selLeiturista').innerHTML='<option value="">Todos</option>'+condutores.map(c=>`<option value="${c}">${c}</option>`).join('');
+  leiturSel='';
+}
+
+function escopo(){
+  const de=horaParaMin($('horaDe').value||'00:00'), ate=horaParaMin($('horaAte').value||'23:59');
+  return registros.filter(r=>{
+    if(baseSel && normBase(r.base)!==normBase(baseSel)) return false;
+    if(modoData==='personalizar' && dataPersonalizada && r.data!==dataPersonalizada) return false;
+    if(!dentroDoIntervalo(r.horaMin,de,ate)) return false;
+    if(leiturSel && (veiculos[r.placa]?.condutor||'')!==leiturSel) return false;
+    return true;
+  });
+}
+
+function agregarPorVeiculo(lista){
+  const porVeiculo={};
+  lista.forEach(r=>{
+    if(!porVeiculo[r.placa]) porVeiculo[r.placa]={placa:r.placa,km:0,registros:0};
+    porVeiculo[r.placa].km+=r.kmRodado;
+    porVeiculo[r.placa].registros+=1;
+  });
+  return Object.values(porVeiculo);
+}
+
+function render(){
+  const filtrados=escopo().filter(r=>!buscaTxt || r.placa.toLowerCase().includes(buscaTxt) || (veiculos[r.placa]?.condutor||'').toLowerCase().includes(buscaTxt));
+  const agregado=agregarPorVeiculo(filtrados).sort((a,b)=>b.km-a.km);
+
+  const totalKm=agregado.reduce((a,r)=>a+r.km,0);
+  $('kTotal').textContent=totalKm.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  $('kVeiculos').textContent=agregado.length;
+  $('kMedia').textContent=agregado.length?(totalKm/agregado.length).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'0';
+  $('kRegistros').textContent=filtrados.length.toLocaleString('pt-BR');
+
+  $('rankWrap').style.height=Math.max(200,agregado.length*28+40)+'px';
+  const labels=agregado.map(r=>nomeExibicao(r.placa));
+  const dataVals=agregado.map(r=>parseFloat(r.km.toFixed(2)));
+  const onClick=(e,el)=>{ if(el.length){ selVeiculo=agregado[el[0].index].placa; renderDetalhe(); } };
+
+  if(!rankChart){
+    rankChart=new Chart($('rank'),{type:'bar',plugins:[valueLabels],
+      data:{labels,datasets:[{label:'KM Rodado',data:dataVals,backgroundColor:'#2d7a2d',borderRadius:6,barThickness:18}]},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,animation:{duration:200},layout:{padding:{right:64}},
+        onClick,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.x.toLocaleString('pt-BR')+' km'}}},
+        scales:{x:{beginAtZero:true,grid:{color:'#e0eee0'}},y:{grid:{display:false}}}}});
+  }else{
+    rankChart.data.labels=labels; rankChart.data.datasets[0].data=dataVals; rankChart.options.onClick=onClick;
+    rankChart.resize(); rankChart.update();
+  }
+  if(selVeiculo) renderDetalhe();
+}
+
+function renderDetalhe(){
+  $('cardDetalhe').style.display='block';
+  const info=veiculos[selVeiculo]||{};
+  $('detTitle').textContent=`${selVeiculo}${info.condutor?' — '+info.condutor:''}${info.base?' — '+info.base:''}`;
+
+  const pts=escopo().filter(r=>r.placa===selVeiculo);
+  const porDia={};
+  pts.forEach(r=>{ porDia[r.data]=(porDia[r.data]||0)+r.kmRodado; });
+  const dias=Object.keys(porDia).sort();
+
+  if(!dias.length){
+    $('detBody').innerHTML='<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:20px">Nenhum registro nesse filtro.</td></tr>';
+    return;
+  }
+  $('detBody').innerHTML=dias.map(d=>{
+    const [a,m,dd]=d.split('-');
+    return `<tr><td>${dd}/${m}/${a}</td><td>${porDia[d].toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>`;
+  }).join('');
+}
+
+function renderAvisos(){
+  const elInv=$('avisoInvalidados');
+  if(!exclusoesInvalidados.length){ elInv.style.display='none'; }
+  else{
+    elInv.style.display='block';
+    elInv.querySelector('summary').textContent=`🚫 ${exclusoesInvalidados.length} veículo(s) removido(s) do relatório inteiro por odômetro não confiável`;
+    $('avisoInvalidadosLista').innerHTML=exclusoesInvalidados.map(e=>
+      `<li><b>${e.placa}</b>${veiculos[e.placa]?.condutor?' — '+veiculos[e.placa].condutor:''} — ${e.motivo}. Nenhum KM desse veículo entra no total.</li>`
+    ).join('');
+  }
+
+  const elOut=$('avisoOutliers');
+  if(!exclusoesIndividuais.length){ elOut.style.display='none'; }
+  else{
+    elOut.style.display='block';
+    elOut.querySelector('summary').textContent=`⚠ ${exclusoesIndividuais.length} registro(s) individual(is) excluído(s) por KM inconsistente`;
+    $('avisoOutliersBody').innerHTML=exclusoesIndividuais.map(e=>{
+      const d=e.data?new Date(e.data+'T12:00:00').toLocaleDateString('pt-BR'):'—';
+      return `<tr><td>${e.placa}</td><td>${d}</td><td>${e.hora_inicio||'—'}</td><td>${e.km_inicial??'—'}</td><td>${e.km_final??'—'}</td><td>${e.motivo}</td></tr>`;
+    }).join('');
+  }
+}
+
+// ── EVENTOS DE FILTRO ───────────────────────────────────────────────
+$('selBase').onchange=()=>{baseSel=$('selBase').value;render();};
+$('selMes').onchange=async()=>{ if($('selMes').value) await selecionarMes($('selMes').value); };
+$('selModoData').onchange=()=>{ modoData=$('selModoData').value; $('fgDataPersonalizada').style.display=modoData==='personalizar'?'flex':'none'; render(); };
+$('dataPersonalizada').onchange=()=>{dataPersonalizada=$('dataPersonalizada').value;render();};
+$('horaDe').onchange=render; $('horaAte').onchange=render;
+$('selLeiturista').onchange=()=>{leiturSel=$('selLeiturista').value;render();};
+$('busca').oninput=()=>{buscaTxt=$('busca').value.trim().toLowerCase();render();};
+
+// ── ADMINISTRAÇÃO: CADASTRO DE VEÍCULOS ─────────────────────────────
+function lerArquivoCadastro(file){
+  const reader=new FileReader();
+  reader.onload=async(e)=>{
+    try{
+      $('statusCadastro').textContent='Lendo o arquivo…';
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+
+      const novos=[];
+      for(let i=1;i<rows.length;i++){
+        const row=rows[i]; if(!row||!row[0]) continue;
+        const placa=String(row[0]).trim().toUpperCase(); if(!placa) continue;
+        novos.push({
+          placa,
+          condutor: row[1]!=null?String(row[1]).trim():'',
+          tipo: row[2]!=null?String(row[2]).trim():'',
+          base: row[3]!=null?String(row[3]).trim():'',
+          marca: row[4]!=null?String(row[4]).trim():''
+        });
+      }
+      if(!novos.length) throw new Error('Nenhum veículo reconhecido na planilha.');
+
+      $('statusCadastro').textContent='Substituindo o cadastro no banco…';
+      const del=await sb.from('veiculos').delete().neq('placa','');
+      if(del.error) throw del.error;
+      const ins=await sb.from('veiculos').insert(novos);
+      if(ins.error) throw ins.error;
+
+      $('statusCadastro').innerHTML=`✅ Cadastro atualizado: <b>${novos.length}</b> veículo(s).`;
+      await carregarVeiculos();
+      construirFiltros(); render();
+      registrarUploadSupabase('km_cadastro');
+    }catch(err){
+      $('statusCadastro').innerHTML='<span style="color:var(--limit)">Falha: '+(err.message||err)+'</span>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+$('pickCadastro').onclick=()=>$('fileCadastro').click();
+$('fileCadastro').onchange=(e)=>{if(e.target.files[0])lerArquivoCadastro(e.target.files[0]);};
+['dragover','dragenter'].forEach(ev=>$('dropCadastro').addEventListener(ev,e=>{e.preventDefault();$('dropCadastro').classList.add('on');}));
+['dragleave','drop'].forEach(ev=>$('dropCadastro').addEventListener(ev,e=>{e.preventDefault();$('dropCadastro').classList.remove('on');}));
+$('dropCadastro').addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f)lerArquivoCadastro(f);});
+
+// ── ADMINISTRAÇÃO: RELATÓRIO DE KM ──────────────────────────────────
+function lerArquivoKm(file){
+  const reader=new FileReader();
+  reader.onload=async(e)=>{
+    try{
+      $('statusKm').textContent='Lendo o arquivo…';
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+
+      const {validos,outliers,invalidados}=processarLinhasKm(rows);
+      if(!validos.length) throw new Error('Nenhum registro válido encontrado no arquivo.');
+
+      const mesRef=validos[0].data.slice(0,7)+'-01';
+
+      $('statusKm').textContent='Substituindo o mês no banco…';
+      const del1=await sb.from('registros_km').delete().eq('mes_ref',mesRef);
+      if(del1.error) throw del1.error;
+      const del2=await sb.from('registros_km_exclusoes').delete().eq('mes_ref',mesRef);
+      if(del2.error) throw del2.error;
+
+      const payload=validos.map(v=>({...v, base:veiculos[v.placa]?.base||null, mes_ref:mesRef}));
+      for(let i=0;i<payload.length;i+=500){
+        $('statusKm').textContent=`Enviando ${Math.min(i+500,payload.length)} de ${payload.length}…`;
+        const ins=await sb.from('registros_km').insert(payload.slice(i,i+500));
+        if(ins.error) throw ins.error;
+      }
+
+      const exclusoesPayload=[
+        ...invalidados.map(v=>({mes_ref:mesRef,placa:v.placa,base:veiculos[v.placa]?.base||null,tipo:'veiculo_invalidado',motivo:`${v.registrosInconsistentes} de ${v.totalRegistros} registro(s) com problema (${v.motivo})`})),
+        ...outliers.map(o=>({mes_ref:mesRef,placa:o.placa,base:veiculos[o.placa]?.base||null,tipo:'registro_individual',motivo:o.motivo,data:converterDataBR(o.data),hora_inicio:o.horaInicio,km_inicial:o.kmInicial,km_final:o.kmFinal}))
+      ];
+      if(exclusoesPayload.length){
+        const insExc=await sb.from('registros_km_exclusoes').insert(exclusoesPayload);
+        if(insExc.error) throw insExc.error;
+      }
+
+      let resumo=`✅ Mês <b>${mesRef}</b>: <b>${validos.length.toLocaleString('pt-BR')}</b> registro(s) salvos.`;
+      if(outliers.length) resumo+=` ${outliers.length} registro(s) individual(is) excluído(s).`;
+      if(invalidados.length) resumo+=` ${invalidados.length} veículo(s) removido(s) do relatório inteiro.`;
+      $('statusKm').innerHTML=resumo;
+
+      registrarUploadSupabase('km');
+      await popularSelMes();
+      await carregarMesesCadastrados();
+      if(mesSel===mesRef) await selecionarMes(mesRef);
+    }catch(err){
+      $('statusKm').innerHTML='<span style="color:var(--limit)">Falha: '+(err.message||err)+'</span>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+$('pickKm').onclick=()=>$('fileKm').click();
+$('fileKm').onchange=(e)=>{if(e.target.files[0])lerArquivoKm(e.target.files[0]);};
+['dragover','dragenter'].forEach(ev=>$('dropKm').addEventListener(ev,e=>{e.preventDefault();$('dropKm').classList.add('on');}));
+['dragleave','drop'].forEach(ev=>$('dropKm').addEventListener(ev,e=>{e.preventDefault();$('dropKm').classList.remove('on');}));
+$('dropKm').addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f)lerArquivoKm(f);});
+
+async function carregarMesesCadastrados(){
+  const el=$('mesesCadastrados');
+  const meses=await buscarMesesDisponiveis();
+  if(!meses.length){ el.textContent='Nenhum mês cadastrado ainda.'; return; }
+  el.innerHTML=meses.map(m=>{
+    const [a,mm]=m.split('-');
+    return `<span style="display:inline-block;margin:2px 8px 2px 0">${mm}/${a}</span>`;
+  }).join('');
+}
+
+// ── MESES DISPONÍVEIS ────────────────────────────────────────────────
+async function buscarMesesDisponiveis(){
+  const {data}=await sb.rpc('meses_registros_km');
+  return (data||[]).map(r=>r.mes_ref);
+}
+async function popularSelMes(){
+  const meses=await buscarMesesDisponiveis();
+  const sel=$('selMes');
+  const atual=sel.value;
+  sel.innerHTML=meses.map(m=>{
+    const [a,mm]=m.split('-');
+    return `<option value="${m}">${mm}/${a}</option>`;
+  }).join('');
+  if(meses.includes(atual)) sel.value=atual;
+  return meses;
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────
+(async()=>{
+  const {data:{user}}=await sb.auth.getUser();
+  if(!user){location.href='/controles';return;}
+  const {data:up}=await sb.from('usuarios_portal').select('nome,perfil,ativo,base').eq('id',user.id).single();
+  if(!up||!up.ativo){location.href='/controles';return;}
+
+  PERFIL_TIPO=up.perfil; PERFIL_BASE=up.base||null;
+  USUARIO_NOME=up.nome||user.email;
+  $('hdr-user').textContent=up.nome||user.email;
+
+  if(PODE_ADMIN()){
+    const btnAdmin=document.createElement('button');
+    btnAdmin.textContent='Administração';
+    btnAdmin.onclick=function(){irPag('admin',this);};
+    $('nav').appendChild(btnAdmin);
+    carregarMesesCadastrados();
+  }
+
+  await carregarVeiculos();
+  const meses=await popularSelMes();
+  if(meses.length){
+    $('dash').style.display='flex';
+    $('semDados').textContent='';
+    await selecionarMes(meses[0]);
+  }else{
+    $('dash').style.display='none';
+    $('semDados').textContent='Nenhum dado ainda. Peça ao gestor para subir um relatório na aba Administração.';
+  }
+})();
+</script>
+<script src="/controles/notificacoes-atualizacao.js"></script>
+
+</body>
+</html>
