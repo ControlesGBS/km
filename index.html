@@ -427,16 +427,24 @@ function render(){
   const labels=agregado.map(r=>nomeExibicao(r.placa));
   const dataVals=agregado.map(r=>parseFloat(r.km.toFixed(2)));
   const onClick=(e,el)=>{ if(el.length){ selVeiculo=agregado[el[0].index].placa; renderDetalhe(); } };
+  // Callbacks do tooltip precisam ser recriados a cada render — senão ficam presos
+  // no `agregado` da primeira vez que o gráfico foi montado, mostrando base errada
+  // depois de trocar o filtro.
+  const tooltipCallbacks={
+    label:c=>c.parsed.x.toLocaleString('pt-BR')+' km',
+    afterLabel:c=>'Base: '+(veiculos[agregado[c.dataIndex].placa]?.base||'—')
+  };
 
   if(!rankChart){
     rankChart=new Chart($('rank'),{type:'bar',plugins:[valueLabels],
       data:{labels,datasets:[{label:'KM Rodado',data:dataVals,backgroundColor:'#2d7a2d',borderRadius:6,barThickness:18}]},
       options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,animation:{duration:200},layout:{padding:{right:64}},
         onClick,
-        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.x.toLocaleString('pt-BR')+' km'}}},
+        plugins:{legend:{display:false},tooltip:{callbacks:tooltipCallbacks}},
         scales:{x:{beginAtZero:true,grid:{color:'#e0eee0'}},y:{grid:{display:false}}}}});
   }else{
     rankChart.data.labels=labels; rankChart.data.datasets[0].data=dataVals; rankChart.options.onClick=onClick;
+    rankChart.options.plugins.tooltip.callbacks=tooltipCallbacks;
     rankChart.resize(); rankChart.update();
   }
   if(selVeiculo) renderDetalhe();
