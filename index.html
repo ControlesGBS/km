@@ -109,7 +109,7 @@
             </select>
           </div>
           <div class="fg" id="fgDataPersonalizada" style="display:none"><input type="date" id="dataPersonalizada"></div>
-          <div class="fg"><span>Horário</span><input type="time" id="horaDe" value="00:00"><span>até</span><input type="time" id="horaAte" value="23:59"></div>
+          <div class="fg"><span>Horário</span><input type="time" id="horaDe" value="07:30"><span>até</span><input type="time" id="horaAte" value="17:30"></div>
           <div class="fg"><span>Leiturista</span><select id="selLeiturista"><option value="">Todos</option></select></div>
           <div class="fg"><span>Buscar</span><input type="search" id="busca" placeholder="placa ou nome..."></div>
         </div>
@@ -393,7 +393,7 @@ function construirFiltros(){
 }
 
 function escopo(){
-  const de=horaParaMin($('horaDe').value||'00:00'), ate=horaParaMin($('horaAte').value||'23:59');
+  const de=horaParaMin($('horaDe').value||'07:30'), ate=horaParaMin($('horaAte').value||'17:30');
   return registros.filter(r=>{
     if(baseSel && normBase(r.base)!==normBase(baseSel)) return false;
     if(modoData==='personalizar' && dataPersonalizada && r.data!==dataPersonalizada) return false;
