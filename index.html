@@ -526,16 +526,21 @@ function mesesEntre(deRef,ateRef){
 
 function ultimoDiaMes(aa,mm){ return new Date(parseInt(aa,10),parseInt(mm,10),0).getDate(); }
 
-// Dia do leiturista é classificado numa única categoria (rota mais específica
-// do dia ganha), do mesmo jeito que classificarDia() classifica urbano/rural
-// nos outros módulos — evita contar o mesmo dia em duas categorias.
-function classificarDiaLeitura(rotas){
+// A jornada só grava o total de leituras do dia, não quantas foram em cada
+// rota — então um dia com rotas de mais de uma categoria (ex: uma rota GD
+// junto com uma rota urbana normal) tem as leituras do dia distribuídas
+// proporcionalmente pelas categorias de rota que apareceram naquele dia,
+// em vez de jogar tudo pra categoria mais específica.
+function contarRotasPorCategoria(rotas){
   const nums=rotas.map(x=>parseInt(String(x).split('|')[0],10)).filter(n=>!isNaN(n));
-  if(nums.some(n=>n===95||n===96)) return 'gd';
-  if(nums.some(n=>(n>=89&&n<=94)||(n>=97&&n<=99))) return 'rural';
-  if(nums.some(n=>n>=80&&n<=88)) return 'localidade';
-  if(nums.some(n=>n>=1&&n<=79)) return 'urbano';
-  return null;
+  const c={gd:0,rural:0,localidade:0,urbano:0};
+  nums.forEach(n=>{
+    if(n===95||n===96) c.gd++;
+    else if((n>=89&&n<=94)||(n>=97&&n<=99)) c.rural++;
+    else if(n>=80&&n<=88) c.localidade++;
+    else if(n>=1&&n<=79) c.urbano++;
+  });
+  return c;
 }
 
 async function carregarJornadaPeriodo(matriculas,di,df){
@@ -597,10 +602,14 @@ async function carregarDetalheLeituras(refs){
     const [aa,mm]=data.split('-');
     const mesIdx=refs.indexOf(`${aa}-${mm}-01`);
     if(mesIdx===-1) return;
-    const cat=classificarDiaLeitura(porDia[chave].rotas);
-    if(!cat) return;
+    const contagem=contarRotasPorCategoria(porDia[chave].rotas);
+    const totalRotas=contagem.gd+contagem.rural+contagem.localidade+contagem.urbano;
+    if(!totalRotas) return;
     if(!leiturasPorMatriculaMes[matricula]) leiturasPorMatriculaMes[matricula]=refs.map(()=>({gd:0,rural:0,localidade:0,urbano:0}));
-    leiturasPorMatriculaMes[matricula][mesIdx][cat]+=porDia[chave].qtd;
+    const qtd=porDia[chave].qtd;
+    ['gd','rural','localidade','urbano'].forEach(cat=>{
+      if(contagem[cat]>0) leiturasPorMatriculaMes[matricula][mesIdx][cat]+=qtd*(contagem[cat]/totalRotas);
+    });
   });
 }
 
@@ -652,7 +661,8 @@ function renderTrimestre(){
     const celulasMes=l.meses.map((v,i)=>{
       const km=v?v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+' km':'—';
       const d=det?det[i]:null;
-      const detalhe=d?`<div class="detalhe-leituras">GD: ${d.gd||'—'}<br>Rural: ${d.rural||'—'}<br>Localidade: ${d.localidade||'—'}<br>Urbano: ${d.urbano||'—'}</div>`:'';
+      const rd=n=>Math.round(n)||'—';
+      const detalhe=d?`<div class="detalhe-leituras">GD: ${rd(d.gd)}<br>Rural: ${rd(d.rural)}<br>Localidade: ${rd(d.localidade)}<br>Urbano: ${rd(d.urbano)}</div>`:'';
       return `<td>${km}${detalhe}</td>`;
     }).join('');
     return `
