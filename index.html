@@ -79,6 +79,9 @@
   tbody td{padding:6px 10px;border-bottom:1px solid var(--line)}
   .tbl-excel th,.tbl-excel td{border:1px solid var(--line)}
   .tbl-excel td.tot,.tbl-excel th.tot{background:var(--brand-soft);font-weight:600}
+  .btn-expandir{background:none;border:1px solid var(--line);border-radius:5px;width:22px;height:22px;font-size:11px;color:var(--muted);line-height:1;padding:0}
+  .detalhe-leituras{display:none;margin-top:4px;padding-top:4px;border-top:1px dashed var(--line);font-size:11px;color:var(--muted);white-space:nowrap}
+  tr.linha-aberta .detalhe-leituras{display:block}
   tbody tr:nth-child(even){background:#f8fbf8}
   .twrap{border-radius:10px;border:1px solid var(--line);overflow:auto;max-height:420px}
 </style>
@@ -162,7 +165,8 @@
 
   <div class="pag" id="pag-trimestre">
     <div class="filters">
-      <div class="fg"><span>Trimestre</span><select id="selTrimestre"></select></div>
+      <div class="fg"><span>De</span><select id="selMesDeTri"></select></div>
+      <div class="fg"><span>Até</span><select id="selMesAteTri"></select></div>
       <div class="fg" id="fgBaseTri"><span>Base</span><select id="selBaseTri"></select></div>
       <div class="fg"><span>Horário</span><input type="time" id="horaDeTri" value="07:30"><span>até</span><input type="time" id="horaAteTri" value="17:30"></div>
       <div class="fg"><span>Leiturista</span><select id="selLeituristaTri"><option value="">Todos</option></select></div>
@@ -319,7 +323,7 @@ function converterDataBR(dmy){
 let veiculos={}; // {PLACA:{condutor,tipo,base,marca}}
 
 async function carregarVeiculos(){
-  const {data}=await sb.from('veiculos').select('placa,condutor,tipo,base,marca');
+  const {data}=await sb.from('veiculos').select('placa,condutor,tipo,base,marca,matricula');
   veiculos={};
   (data||[]).forEach(v=>{veiculos[v.placa]=v;});
 }
@@ -339,8 +343,8 @@ let rankChart=null;
 
 // ── TRIMESTRAL ──────────────────────────────────────────────────────
 const MESES_ABREV=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-const MESES_NOME=['JANEIRO','FEVEREIRO','MARÇO','ABRIL','MAIO','JUNHO','JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO'];
-let registrosTri=[], triBaseSel='', triLeiturSel='', triMesesNomes=[];
+let registrosTri=[], triBaseSel='', triLeiturSel='', triMesesNomes=[], triMesesRefs=[];
+let leiturasPorMatriculaMes={}; // matricula -> [{gd,rural,localidade,urbano}, ...] alinhado com triMesesRefs
 
 function horaParaMin(hhmmss){ const p=hhmmss.split(':').map(Number); return (p[0]||0)*60+(p[1]||0); }
 function dentroDoIntervalo(min,de,ate){ if(de<=ate) return min>=de&&min<=ate; return min>=de||min<=ate; }
@@ -498,33 +502,106 @@ function renderDetalhe(){
   }).join('');
 }
 
-function construirTrimestres(meses){
-  const set=new Set();
-  meses.forEach(m=>{
+function popularSelMesesTri(meses){
+  const asc=[...meses].sort();
+  const opts=asc.map(m=>{
     const [aa,mm]=m.split('-');
-    const q=Math.floor((parseInt(mm,10)-1)/3);
-    set.add(aa+'-Q'+q);
-  });
-  const lista=[...set].sort().reverse();
-  $('selTrimestre').innerHTML=lista.map(v=>{
-    const [aa,qs]=v.split('-Q'); const q=parseInt(qs,10);
-    return `<option value="${v}">${MESES_ABREV[q*3]}-${MESES_ABREV[q*3+2]}/${aa}</option>`;
+    return `<option value="${m}">${mm}/${aa}</option>`;
   }).join('');
+  $('selMesDeTri').innerHTML=opts;
+  $('selMesAteTri').innerHTML=opts;
+  return asc;
+}
+
+function mesesEntre(deRef,ateRef){
+  let [aa,mm]=deRef.split('-').map(Number);
+  const [aaf,mmf]=ateRef.split('-').map(Number);
+  const lista=[];
+  while(aa<aaf || (aa===aaf && mm<=mmf)){
+    lista.push(`${aa}-${String(mm).padStart(2,'0')}-01`);
+    mm++; if(mm>12){mm=1;aa++;}
+  }
   return lista;
 }
 
-async function carregarTrimestre(valor){
-  if(!valor) return;
-  const [aa,qs]=valor.split('-Q'); const q=parseInt(qs,10);
-  const mesesRefs=[0,1,2].map(i=>`${aa}-${String(q*3+i+1).padStart(2,'0')}-01`);
-  triMesesNomes=[0,1,2].map(i=>MESES_NOME[q*3+i]);
+function ultimoDiaMes(aa,mm){ return new Date(parseInt(aa,10),parseInt(mm,10),0).getDate(); }
 
-  const paginas=await Promise.all(mesesRefs.map(m=>carregarRegistrosDoMes(m)));
+// Dia do leiturista é classificado numa única categoria (rota mais específica
+// do dia ganha), do mesmo jeito que classificarDia() classifica urbano/rural
+// nos outros módulos — evita contar o mesmo dia em duas categorias.
+function classificarDiaLeitura(rotas){
+  const nums=rotas.map(x=>parseInt(String(x).split('|')[0],10)).filter(n=>!isNaN(n));
+  if(nums.some(n=>n===95||n===96)) return 'gd';
+  if(nums.some(n=>(n>=89&&n<=94)||(n>=97&&n<=99))) return 'rural';
+  if(nums.some(n=>n>=80&&n<=88)) return 'localidade';
+  if(nums.some(n=>n>=1&&n<=79)) return 'urbano';
+  return null;
+}
+
+async function carregarJornadaPeriodo(matriculas,di,df){
+  if(!matriculas.length) return [];
+  const LOTE=1000;
+  let {count}=await sb.from('jornada').select('*',{count:'exact',head:true}).in('matricula',matriculas).gte('data',di).lte('data',df);
+  const totalPaginas=Math.max(1,Math.ceil((count||0)/LOTE));
+  const paginas=await Promise.all(Array.from({length:totalPaginas},(_,i)=>
+    sb.from('jornada').select('matricula,data,rotas_json,qtd_leituras').in('matricula',matriculas).gte('data',di).lte('data',df).range(i*LOTE,i*LOTE+LOTE-1)
+  ));
+  return paginas.flatMap(p=>p.data||[]);
+}
+
+async function carregarPeriodo(){
+  let deRef=$('selMesDeTri').value, ateRef=$('selMesAteTri').value;
+  if(!deRef||!ateRef) return;
+  if(deRef>ateRef){ [deRef,ateRef]=[ateRef,deRef]; $('selMesDeTri').value=deRef; $('selMesAteTri').value=ateRef; }
+
+  const refs=mesesEntre(deRef,ateRef);
+  triMesesRefs=refs;
+  triMesesNomes=refs.map(r=>{
+    const [aa,mm]=r.split('-');
+    return `${MESES_ABREV[parseInt(mm,10)-1]}/${aa.slice(2)}`;
+  });
+
+  const paginas=await Promise.all(refs.map(m=>carregarRegistrosDoMes(m)));
   const brutos=paginas.flatMap((rows,i)=>rows.map(r=>({...r,_mesIdx:i})));
   registrosTri=restringePorPerfil(brutos.map(r=>({placa:r.placa,base:r.base,data:r.data,horaMin:horaParaMin(r.hora_inicio),kmRodado:Number(r.km_rodado),mesIdx:r._mesIdx})));
 
   construirFiltrosTrimestre();
+  await carregarDetalheLeituras(refs);
   renderTrimestre();
+}
+
+async function carregarDetalheLeituras(refs){
+  const placas=[...new Set(registrosTri.map(r=>r.placa))];
+  const matriculas=[...new Set(placas.map(p=>veiculos[p]?.matricula).filter(Boolean))];
+  leiturasPorMatriculaMes={};
+  if(!matriculas.length) return;
+
+  const [aaIni,mmIni]=refs[0].split('-');
+  const [aaFim,mmFim]=refs[refs.length-1].split('-');
+  const di=`${aaIni}-${mmIni}-01`;
+  const df=`${aaFim}-${mmFim}-${String(ultimoDiaMes(aaFim,mmFim)).padStart(2,'0')}`;
+
+  const jornadaRows=await carregarJornadaPeriodo(matriculas,di,df);
+
+  const porDia={};
+  jornadaRows.forEach(r=>{
+    const chave=r.matricula+'|'+r.data;
+    if(!porDia[chave]) porDia[chave]={rotas:[],qtd:0};
+    let rt=[]; try{ rt=JSON.parse(r.rotas_json||'[]'); }catch(e){}
+    porDia[chave].rotas.push(...rt);
+    porDia[chave].qtd+=r.qtd_leituras||0;
+  });
+
+  Object.keys(porDia).forEach(chave=>{
+    const [matricula,data]=chave.split('|');
+    const [aa,mm]=data.split('-');
+    const mesIdx=refs.indexOf(`${aa}-${mm}-01`);
+    if(mesIdx===-1) return;
+    const cat=classificarDiaLeitura(porDia[chave].rotas);
+    if(!cat) return;
+    if(!leiturasPorMatriculaMes[matricula]) leiturasPorMatriculaMes[matricula]=refs.map(()=>({gd:0,rural:0,localidade:0,urbano:0}));
+    leiturasPorMatriculaMes[matricula][mesIdx][cat]+=porDia[chave].qtd;
+  });
 }
 
 function construirFiltrosTrimestre(){
@@ -556,30 +633,44 @@ function escopoTri(){
 }
 
 function renderTrimestre(){
-  $('theadTri').innerHTML=`<th>Leiturista</th><th>Placa</th><th>Base</th>${triMesesNomes.map(n=>`<th>${n}</th>`).join('')}<th class="tot">Total</th>`;
+  $('theadTri').innerHTML=`<th></th><th>Leiturista</th><th>Placa</th><th>Base</th>${triMesesNomes.map(n=>`<th>${n}</th>`).join('')}<th class="tot">Total</th>`;
 
   const porVeiculo={};
   escopoTri().forEach(r=>{
-    if(!porVeiculo[r.placa]) porVeiculo[r.placa]={placa:r.placa,condutor:veiculos[r.placa]?.condutor||'—',base:veiculos[r.placa]?.base||r.base||'—',meses:[0,0,0]};
+    if(!porVeiculo[r.placa]) porVeiculo[r.placa]={placa:r.placa,condutor:veiculos[r.placa]?.condutor||'—',base:veiculos[r.placa]?.base||r.base||'—',matricula:veiculos[r.placa]?.matricula||null,meses:triMesesNomes.map(()=>0)};
     porVeiculo[r.placa].meses[r.mesIdx]+=r.kmRodado;
   });
   const linhas=Object.values(porVeiculo).sort((a,b)=>a.condutor.localeCompare(b.condutor,'pt-BR'));
 
   if(!linhas.length){
-    $('tbodyTri').innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Nenhum registro nesse filtro.</td></tr>';
+    $('tbodyTri').innerHTML=`<tr><td colspan="${triMesesNomes.length+5}" style="text-align:center;color:var(--muted);padding:20px">Nenhum registro nesse filtro.</td></tr>`;
     return;
   }
   $('tbodyTri').innerHTML=linhas.map(l=>{
     const total=l.meses.reduce((s,v)=>s+v,0);
+    const det=l.matricula?leiturasPorMatriculaMes[l.matricula]:null;
+    const celulasMes=l.meses.map((v,i)=>{
+      const km=v?v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+' km':'—';
+      const d=det?det[i]:null;
+      const detalhe=d?`<div class="detalhe-leituras">GD: ${d.gd||'—'}<br>Rural: ${d.rural||'—'}<br>Localidade: ${d.localidade||'—'}<br>Urbano: ${d.urbano||'—'}</div>`:'';
+      return `<td>${km}${detalhe}</td>`;
+    }).join('');
     return `
     <tr>
+      <td><button class="btn-expandir" onclick="toggleLinhaTri(this)">▸</button></td>
       <td>${l.condutor}</td>
       <td>${l.placa}</td>
       <td>${l.base}</td>
-      ${l.meses.map(v=>`<td>${v?v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+' km':'—'}</td>`).join('')}
+      ${celulasMes}
       <td class="tot">${total.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})} km</td>
     </tr>`;
   }).join('');
+}
+
+function toggleLinhaTri(btn){
+  const tr=btn.closest('tr');
+  const aberto=tr.classList.toggle('linha-aberta');
+  btn.textContent=aberto?'▾':'▸';
 }
 
 function renderAvisos(){
@@ -614,7 +705,8 @@ $('horaDe').onchange=render; $('horaAte').onchange=render;
 $('selLeiturista').onchange=()=>{leiturSel=$('selLeiturista').value;render();};
 $('busca').oninput=()=>{buscaTxt=$('busca').value.trim().toLowerCase();render();};
 
-$('selTrimestre').onchange=()=>{ if($('selTrimestre').value) carregarTrimestre($('selTrimestre').value); };
+$('selMesDeTri').onchange=carregarPeriodo;
+$('selMesAteTri').onchange=carregarPeriodo;
 $('selBaseTri').onchange=()=>{triBaseSel=$('selBaseTri').value;renderTrimestre();};
 $('horaDeTri').onchange=renderTrimestre; $('horaAteTri').onchange=renderTrimestre;
 $('selLeituristaTri').onchange=()=>{triLeiturSel=$('selLeituristaTri').value;renderTrimestre();};
@@ -776,10 +868,13 @@ async function popularSelMes(){
     $('semDados').textContent='';
     await selecionarMes(meses[0]);
 
-    const trimestres=construirTrimestres(meses);
-    if(trimestres.length){
-      $('selTrimestre').value=trimestres[0];
-      await carregarTrimestre(trimestres[0]);
+    const mesesAsc=popularSelMesesTri(meses);
+    if(mesesAsc.length){
+      const ate=mesesAsc[mesesAsc.length-1];
+      const de=mesesAsc[Math.max(0,mesesAsc.length-3)];
+      $('selMesDeTri').value=de;
+      $('selMesAteTri').value=ate;
+      await carregarPeriodo();
     }
   }else{
     $('dash').style.display='none';
