@@ -77,6 +77,8 @@
   table{width:100%;border-collapse:collapse;font-size:13px}
   thead th{background:var(--brand-d);color:#c0e8c0;padding:8px 10px;text-align:left;font-size:12px;font-weight:500}
   tbody td{padding:6px 10px;border-bottom:1px solid var(--line)}
+  .tbl-excel th,.tbl-excel td{border:1px solid var(--line)}
+  .tbl-excel td.tot,.tbl-excel th.tot{background:var(--brand-soft);font-weight:600}
   tbody tr:nth-child(even){background:#f8fbf8}
   .twrap{border-radius:10px;border:1px solid var(--line);overflow:auto;max-height:420px}
 </style>
@@ -170,7 +172,7 @@
       <h3>KM Rodado por Trimestre</h3>
       <p class="sub">Soma de km por leiturista, mês a mês, dentro do trimestre selecionado.</p>
       <div class="twrap" style="max-height:600px">
-        <table>
+        <table class="tbl-excel">
           <thead><tr id="theadTri"></tr></thead>
           <tbody id="tbodyTri"></tbody>
         </table>
@@ -554,7 +556,7 @@ function escopoTri(){
 }
 
 function renderTrimestre(){
-  $('theadTri').innerHTML=`<th>Leiturista</th><th>Placa</th><th>Base</th>${triMesesNomes.map(n=>`<th>${n}</th>`).join('')}`;
+  $('theadTri').innerHTML=`<th>Leiturista</th><th>Placa</th><th>Base</th>${triMesesNomes.map(n=>`<th>${n}</th>`).join('')}<th class="tot">Total</th>`;
 
   const porVeiculo={};
   escopoTri().forEach(r=>{
@@ -564,17 +566,20 @@ function renderTrimestre(){
   const linhas=Object.values(porVeiculo).sort((a,b)=>a.condutor.localeCompare(b.condutor,'pt-BR'));
 
   if(!linhas.length){
-    $('tbodyTri').innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">Nenhum registro nesse filtro.</td></tr>';
+    $('tbodyTri').innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Nenhum registro nesse filtro.</td></tr>';
     return;
   }
-  $('tbodyTri').innerHTML=linhas.map(l=>`
+  $('tbodyTri').innerHTML=linhas.map(l=>{
+    const total=l.meses.reduce((s,v)=>s+v,0);
+    return `
     <tr>
       <td>${l.condutor}</td>
       <td>${l.placa}</td>
       <td>${l.base}</td>
       ${l.meses.map(v=>`<td>${v?v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+' km':'—'}</td>`).join('')}
-    </tr>
-  `).join('');
+      <td class="tot">${total.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})} km</td>
+    </tr>`;
+  }).join('');
 }
 
 function renderAvisos(){
