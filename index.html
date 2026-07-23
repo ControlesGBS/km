@@ -384,6 +384,13 @@ function nomeExibicao(placa){
   return c?`${placa} — ${c}`:placa;
 }
 
+// Prioriza o condutor gravado junto do registro daquele mês (snapshot); só
+// cai pro cadastro atual em registros antigos, de antes dessa gravação existir.
+function nomeExibicaoAgregado(r){
+  const c=r.condutor||veiculos[r.placa]?.condutor;
+  return c?`${r.placa} - ${c}`:r.placa;
+}
+
 // ── DADOS DO PAINEL ─────────────────────────────────────────────────
 let registros=[]; // {placa,base,data,horaMin,kmRodado} do mês selecionado, já filtrado por perfil
 let exclusoesInvalidados=[], exclusoesIndividuais=[];
@@ -415,7 +422,7 @@ async function carregarRegistrosDoMes(mesRef){
   let {count}=await sb.from('registros_km').select('*',{count:'exact',head:true}).eq('mes_ref',mesRef);
   const totalPaginas=Math.max(1,Math.ceil((count||0)/LOTE));
   const paginas=await Promise.all(Array.from({length:totalPaginas},(_,i)=>
-    sb.from('registros_km').select('placa,base,data,hora_inicio,km_rodado').eq('mes_ref',mesRef).range(i*LOTE,i*LOTE+LOTE-1)
+    sb.from('registros_km').select('placa,base,data,hora_inicio,km_rodado,condutor,matricula').eq('mes_ref',mesRef).range(i*LOTE,i*LOTE+LOTE-1)
   ));
   return paginas.flatMap(p=>p.data||[]);
 }
@@ -440,7 +447,7 @@ function restringePorPerfil(lista){
 async function selecionarMes(mesRef){
   mesSel=mesRef;
   const [brutos,exclusoes]=await Promise.all([carregarRegistrosDoMes(mesRef),carregarExclusoesDoMes(mesRef)]);
-  registros=restringePorPerfil(brutos.map(r=>({placa:r.placa,base:r.base,data:r.data,horaMin:horaParaMin(r.hora_inicio),kmRodado:Number(r.km_rodado)})));
+  registros=restringePorPerfil(brutos.map(r=>({placa:r.placa,base:r.base,data:r.data,horaMin:horaParaMin(r.hora_inicio),kmRodado:Number(r.km_rodado),condutor:r.condutor||null})));
   const exclusoesFiltradas=restringePorPerfil(exclusoes);
   exclusoesInvalidados=exclusoesFiltradas.filter(e=>e.tipo==='veiculo_invalidado');
   exclusoesIndividuais=exclusoesFiltradas.filter(e=>e.tipo==='registro_individual');
@@ -501,7 +508,7 @@ function escopo(){
 function agregarPorVeiculo(lista){
   const porVeiculo={};
   lista.forEach(r=>{
-    if(!porVeiculo[r.placa]) porVeiculo[r.placa]={placa:r.placa,km:0,registros:0};
+    if(!porVeiculo[r.placa]) porVeiculo[r.placa]={placa:r.placa,km:0,registros:0,condutor:r.condutor||null};
     porVeiculo[r.placa].km+=r.kmRodado;
     porVeiculo[r.placa].registros+=1;
   });
@@ -519,7 +526,7 @@ function render(){
   $('kRegistros').textContent=filtrados.length.toLocaleString('pt-BR');
 
   $('rankWrap').style.height=Math.max(200,agregado.length*28+40)+'px';
-  const labels=agregado.map(r=>nomeExibicao(r.placa));
+  const labels=agregado.map(r=>nomeExibicaoAgregado(r));
   const dataVals=agregado.map(r=>parseFloat(r.km.toFixed(2)));
   const onClick=(e,el)=>{ if(el.length){ selVeiculo=agregado[el[0].index].placa; renderDetalhe(); } };
   // Callbacks do tooltip precisam ser recriados a cada render — senão ficam presos
@@ -548,9 +555,9 @@ function render(){
 function renderDetalhe(){
   $('cardDetalhe').style.display='block';
   const info=veiculos[selVeiculo]||{};
-  $('detTitle').textContent=`${selVeiculo}${info.condutor?' — '+info.condutor:''}${info.base?' — '+info.base:''}`;
-
   const pts=escopo().filter(r=>r.placa===selVeiculo);
+  const condutorSnapshot=pts.find(r=>r.condutor)?.condutor||info.condutor;
+  $('detTitle').textContent=`${selVeiculo}${condutorSnapshot?' — '+condutorSnapshot:''}${info.base?' — '+info.base:''}`;
   const porDia={};
   pts.forEach(r=>{ porDia[r.data]=(porDia[r.data]||0)+r.kmRodado; });
   const dias=Object.keys(porDia).sort();
@@ -631,7 +638,7 @@ async function carregarPeriodo(){
 
   const paginas=await Promise.all(refs.map(m=>carregarRegistrosDoMes(m)));
   const brutos=paginas.flatMap((rows,i)=>rows.map(r=>({...r,_mesIdx:i})));
-  registrosTri=restringePorPerfil(brutos.map(r=>({placa:r.placa,base:r.base,data:r.data,horaMin:horaParaMin(r.hora_inicio),kmRodado:Number(r.km_rodado),mesIdx:r._mesIdx})));
+  registrosTri=restringePorPerfil(brutos.map(r=>({placa:r.placa,base:r.base,data:r.data,horaMin:horaParaMin(r.hora_inicio),kmRodado:Number(r.km_rodado),mesIdx:r._mesIdx,condutor:r.condutor||null,matricula:r.matricula||null})));
 
   construirFiltrosTrimestre();
   await carregarDetalheLeituras(refs);
@@ -719,8 +726,20 @@ function renderTrimestre(){
 
   const porVeiculo={};
   escopoTri().forEach(r=>{
-    if(!porVeiculo[r.placa]) porVeiculo[r.placa]={placa:r.placa,condutor:veiculos[r.placa]?.condutor||'—',base:veiculos[r.placa]?.base||r.base||'—',matricula:veiculos[r.placa]?.matricula||null,meses:triMesesNomes.map(()=>0)};
-    porVeiculo[r.placa].meses[r.mesIdx]+=r.kmRodado;
+    if(!porVeiculo[r.placa]) porVeiculo[r.placa]={placa:r.placa,condutor:null,base:veiculos[r.placa]?.base||r.base||'—',matricula:null,_ultimoMesIdx:-1,meses:triMesesNomes.map(()=>0)};
+    const linha=porVeiculo[r.placa];
+    linha.meses[r.mesIdx]+=r.kmRodado;
+    // usa o condutor/matrícula gravados no mês mais recente do período (reflete
+    // quem dirigia de fato); só cai pro cadastro atual se nenhum mês tiver snapshot
+    if(r.mesIdx>=linha._ultimoMesIdx && (r.condutor||r.matricula)){
+      if(r.condutor) linha.condutor=r.condutor;
+      if(r.matricula) linha.matricula=r.matricula;
+      linha._ultimoMesIdx=r.mesIdx;
+    }
+  });
+  Object.values(porVeiculo).forEach(l=>{
+    if(!l.condutor) l.condutor=veiculos[l.placa]?.condutor||'—';
+    if(!l.matricula) l.matricula=veiculos[l.placa]?.matricula||null;
   });
   const linhas=Object.values(porVeiculo).sort((a,b)=>a.condutor.localeCompare(b.condutor,'pt-BR'));
 
@@ -907,7 +926,7 @@ function lerArquivoKm(file){
       const del2=await sb.from('registros_km_exclusoes').delete().eq('mes_ref',mesRef);
       if(del2.error) throw del2.error;
 
-      const payload=validos.map(v=>({...v, base:veiculos[v.placa]?.base||null, mes_ref:mesRef}));
+      const payload=validos.map(v=>({...v, base:veiculos[v.placa]?.base||null, condutor:veiculos[v.placa]?.condutor||null, matricula:veiculos[v.placa]?.matricula||null, mes_ref:mesRef}));
       for(let i=0;i<payload.length;i+=500){
         $('statusKm').textContent=`Enviando ${Math.min(i+500,payload.length)} de ${payload.length}…`;
         const ins=await sb.from('registros_km').insert(payload.slice(i,i+500));

@@ -73,3 +73,16 @@ create table if not exists km_horario_config (
   constraint km_horario_config_id_check check (id = 1)
 );
 insert into km_horario_config (id) values (1) on conflict (id) do nothing;
+
+-- ============================================================
+-- MIGRAÇÃO: guarda condutor/matrícula junto de cada registro de KM (no
+-- momento do upload mensal), em vez de sempre buscar ao vivo do cadastro.
+-- Motivo: se o condutor de um veículo troca (ex: demissão), o cadastro é
+-- substituído inteiro -- sem isso, os meses ANTIGOS passavam a mostrar o
+-- nome do condutor NOVO, mesmo pros dias em que ele nem trabalhava aqui.
+-- Registros já existentes ficam com essas colunas nulas (sem como
+-- recuperar retroativamente quem dirigia) -- o código cai pro cadastro
+-- atual como fallback nesse caso.
+-- ============================================================
+alter table registros_km add column if not exists condutor text;
+alter table registros_km add column if not exists matricula text;
