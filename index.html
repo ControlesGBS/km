@@ -124,6 +124,7 @@
           </div>
           <div class="fg" id="fgHorarioPersonalizado"><input type="time" id="horaDe" value="07:30"><span>até</span><input type="time" id="horaAte" value="17:30"></div>
           <div class="fg"><span>Proprietário</span><select id="selProprietario"><option value="">Todos</option></select></div>
+          <div class="fg"><span>Tipo</span><select id="selTipo"><option value="">Todos</option></select></div>
           <div class="fg"><span>Leiturista</span><select id="selLeiturista"><option value="">Todos</option></select></div>
           <div class="fg"><span>Buscar</span><input type="search" id="busca" placeholder="placa ou nome..."></div>
         </div>
@@ -185,6 +186,7 @@
       </div>
       <div class="fg" id="fgHorarioPersonalizadoTri"><input type="time" id="horaDeTri" value="07:30"><span>até</span><input type="time" id="horaAteTri" value="17:30"></div>
       <div class="fg"><span>Proprietário</span><select id="selProprietarioTri"><option value="">Todos</option></select></div>
+      <div class="fg"><span>Tipo</span><select id="selTipoTri"><option value="">Todos</option></select></div>
       <div class="fg"><span>Leiturista</span><select id="selLeituristaTri"><option value="">Todos</option></select></div>
     </div>
 
@@ -387,14 +389,14 @@ let registros=[]; // {placa,base,data,horaMin,kmRodado} do mês selecionado, já
 let exclusoesInvalidados=[], exclusoesIndividuais=[];
 let mesSel=null;
 let modoData='todas', dataPersonalizada=null, baseSel='', leiturSel='', buscaTxt='';
-let modoHorario='personalizado', proprietarioSel='';
+let modoHorario='personalizado', proprietarioSel='', tipoSel='';
 let selVeiculo=null;
 let rankChart=null;
 
 // ── TRIMESTRAL ──────────────────────────────────────────────────────
 const MESES_ABREV=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 let registrosTri=[], triBaseSel='', triLeiturSel='', triMesesNomes=[], triMesesRefs=[];
-let modoHorarioTri='personalizado', triProprietarioSel='';
+let modoHorarioTri='personalizado', triProprietarioSel='', triTipoSel='';
 let leiturasPorMatriculaMes={}; // matricula -> [{gd,rural,localidade,urbano}, ...] alinhado com triMesesRefs
 
 function horaParaMin(hhmmss){ const p=hhmmss.split(':').map(Number); return (p[0]||0)*60+(p[1]||0); }
@@ -477,6 +479,10 @@ function construirFiltros(){
   const proprietarios=[...new Set(registros.map(r=>veiculos[r.placa]?.proprietario).filter(Boolean))].sort();
   $('selProprietario').innerHTML='<option value="">Todos</option>'+proprietarios.map(p=>`<option value="${p}">${p}</option>`).join('');
   proprietarioSel='';
+
+  const tipos=[...new Set(registros.map(r=>veiculos[r.placa]?.tipo).filter(Boolean))].sort();
+  $('selTipo').innerHTML='<option value="">Todos</option>'+tipos.map(t=>`<option value="${t}">${t}</option>`).join('');
+  tipoSel='';
 }
 
 function escopo(){
@@ -486,6 +492,7 @@ function escopo(){
     if(modoData==='personalizar' && dataPersonalizada && r.data!==dataPersonalizada) return false;
     if(!dentroDoIntervalo(r.horaMin,de,ate)) return false;
     if(proprietarioSel && (veiculos[r.placa]?.proprietario||'')!==proprietarioSel) return false;
+    if(tipoSel && (veiculos[r.placa]?.tipo||'')!==tipoSel) return false;
     if(leiturSel && (veiculos[r.placa]?.condutor||'')!==leiturSel) return false;
     return true;
   });
@@ -689,6 +696,10 @@ function construirFiltrosTrimestre(){
   const proprietarios=[...new Set(registrosTri.map(r=>veiculos[r.placa]?.proprietario).filter(Boolean))].sort();
   $('selProprietarioTri').innerHTML='<option value="">Todos</option>'+proprietarios.map(p=>`<option value="${p}">${p}</option>`).join('');
   triProprietarioSel='';
+
+  const tipos=[...new Set(registrosTri.map(r=>veiculos[r.placa]?.tipo).filter(Boolean))].sort();
+  $('selTipoTri').innerHTML='<option value="">Todos</option>'+tipos.map(t=>`<option value="${t}">${t}</option>`).join('');
+  triTipoSel='';
 }
 
 function escopoTri(){
@@ -697,6 +708,7 @@ function escopoTri(){
     if(triBaseSel && normBase(r.base)!==normBase(triBaseSel)) return false;
     if(!dentroDoIntervalo(r.horaMin,de,ate)) return false;
     if(triProprietarioSel && (veiculos[r.placa]?.proprietario||'')!==triProprietarioSel) return false;
+    if(triTipoSel && (veiculos[r.placa]?.tipo||'')!==triTipoSel) return false;
     if(triLeiturSel && (veiculos[r.placa]?.condutor||'')!==triLeiturSel) return false;
     return true;
   });
@@ -775,6 +787,7 @@ $('dataPersonalizada').onchange=()=>{dataPersonalizada=$('dataPersonalizada').va
 $('horaDe').onchange=render; $('horaAte').onchange=render;
 $('selModoHorario').onchange=()=>{ modoHorario=$('selModoHorario').value; $('fgHorarioPersonalizado').style.display=modoHorario==='personalizado'?'flex':'none'; render(); };
 $('selProprietario').onchange=()=>{proprietarioSel=$('selProprietario').value;render();};
+$('selTipo').onchange=()=>{tipoSel=$('selTipo').value;render();};
 $('selLeiturista').onchange=()=>{leiturSel=$('selLeiturista').value;render();};
 $('busca').oninput=()=>{buscaTxt=$('busca').value.trim().toLowerCase();render();};
 
@@ -784,6 +797,7 @@ $('selBaseTri').onchange=()=>{triBaseSel=$('selBaseTri').value;renderTrimestre()
 $('horaDeTri').onchange=renderTrimestre; $('horaAteTri').onchange=renderTrimestre;
 $('selModoHorarioTri').onchange=()=>{ modoHorarioTri=$('selModoHorarioTri').value; $('fgHorarioPersonalizadoTri').style.display=modoHorarioTri==='personalizado'?'flex':'none'; renderTrimestre(); };
 $('selProprietarioTri').onchange=()=>{triProprietarioSel=$('selProprietarioTri').value;renderTrimestre();};
+$('selTipoTri').onchange=()=>{triTipoSel=$('selTipoTri').value;renderTrimestre();};
 $('selLeituristaTri').onchange=()=>{triLeiturSel=$('selLeituristaTri').value;renderTrimestre();};
 
 $('btnSalvarHorario').onclick=async()=>{
@@ -796,6 +810,22 @@ $('btnSalvarHorario').onclick=async()=>{
 };
 
 // ── ADMINISTRAÇÃO: CADASTRO DE VEÍCULOS ─────────────────────────────
+// A planilha "InoPrime Veículos" traz várias colunas extras (Grupo, Modelo, Ano,
+// Data Criação, Produtos/Mensalidade, Ações...) em posições que variam de upload
+// pra upload -- por isso a leitura é por NOME do cabeçalho, não por posição fixa.
+// "Grupo" é aceito como sinônimo de "Base" (é o nome que a InoPrime usa pra isso).
+const MAPA_CABECALHOS_VEICULOS={
+  'placa':'placa',
+  'condutor':'condutor',
+  'tipo':'tipo',
+  'base':'base','grupo':'base',
+  'marca':'marca',
+  'proprietario':'proprietario'
+};
+function normalizarCabecalho(s){
+  return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
+}
+
 function lerArquivoCadastro(file){
   const reader=new FileReader();
   reader.onload=async(e)=>{
@@ -805,17 +835,31 @@ function lerArquivoCadastro(file){
       const ws=wb.Sheets[wb.SheetNames[0]];
       const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
 
+      let linhaCab=-1, colunas={};
+      for(let i=0;i<rows.length;i++){
+        const row=rows[i]; if(!row) continue;
+        const idx={};
+        row.forEach((cel,c)=>{
+          const campo=MAPA_CABECALHOS_VEICULOS[normalizarCabecalho(cel)];
+          if(campo) idx[campo]=c;
+        });
+        if(idx.placa!=null){ linhaCab=i; colunas=idx; break; }
+      }
+      if(linhaCab===-1) throw new Error('Não encontrei a coluna "Placa" na planilha.');
+
+      const valor=(row,campo)=> colunas[campo]!=null && row[colunas[campo]]!=null ? String(row[colunas[campo]]).trim() : '';
+
       const novos=[];
-      for(let i=1;i<rows.length;i++){
-        const row=rows[i]; if(!row||!row[0]) continue;
-        const placa=String(row[0]).trim().toUpperCase(); if(!placa) continue;
+      for(let i=linhaCab+1;i<rows.length;i++){
+        const row=rows[i]; if(!row) continue;
+        const placa=valor(row,'placa').toUpperCase(); if(!placa) continue;
         novos.push({
           placa,
-          condutor: row[1]!=null?String(row[1]).trim():'',
-          tipo: row[2]!=null?String(row[2]).trim():'',
-          base: row[3]!=null?String(row[3]).trim():'',
-          marca: row[4]!=null?String(row[4]).trim():'',
-          proprietario: row[5]!=null?String(row[5]).trim():''
+          condutor: valor(row,'condutor'),
+          tipo: valor(row,'tipo'),
+          base: valor(row,'base'),
+          marca: valor(row,'marca'),
+          proprietario: valor(row,'proprietario')
         });
       }
       if(!novos.length) throw new Error('Nenhum veículo reconhecido na planilha.');
