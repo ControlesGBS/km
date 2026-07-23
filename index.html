@@ -115,7 +115,15 @@
             </select>
           </div>
           <div class="fg" id="fgDataPersonalizada" style="display:none"><input type="date" id="dataPersonalizada"></div>
-          <div class="fg"><span>Horário</span><input type="time" id="horaDe" value="07:30"><span>até</span><input type="time" id="horaAte" value="17:30"></div>
+          <div class="fg"><span>Horário</span>
+            <select id="selModoHorario">
+              <option value="personalizado">Personalizado</option>
+              <option value="dentro">Dentro Horário</option>
+              <option value="fora">Fora Horário</option>
+            </select>
+          </div>
+          <div class="fg" id="fgHorarioPersonalizado"><input type="time" id="horaDe" value="07:30"><span>até</span><input type="time" id="horaAte" value="17:30"></div>
+          <div class="fg"><span>Proprietário</span><select id="selProprietario"><option value="">Todos</option></select></div>
           <div class="fg"><span>Leiturista</span><select id="selLeiturista"><option value="">Todos</option></select></div>
           <div class="fg"><span>Buscar</span><input type="search" id="busca" placeholder="placa ou nome..."></div>
         </div>
@@ -168,7 +176,15 @@
       <div class="fg"><span>De</span><select id="selMesDeTri"></select></div>
       <div class="fg"><span>Até</span><select id="selMesAteTri"></select></div>
       <div class="fg" id="fgBaseTri"><span>Base</span><select id="selBaseTri"></select></div>
-      <div class="fg"><span>Horário</span><input type="time" id="horaDeTri" value="07:30"><span>até</span><input type="time" id="horaAteTri" value="17:30"></div>
+      <div class="fg"><span>Horário</span>
+        <select id="selModoHorarioTri">
+          <option value="personalizado">Personalizado</option>
+          <option value="dentro">Dentro Horário</option>
+          <option value="fora">Fora Horário</option>
+        </select>
+      </div>
+      <div class="fg" id="fgHorarioPersonalizadoTri"><input type="time" id="horaDeTri" value="07:30"><span>até</span><input type="time" id="horaAteTri" value="17:30"></div>
+      <div class="fg"><span>Proprietário</span><select id="selProprietarioTri"><option value="">Todos</option></select></div>
       <div class="fg"><span>Leiturista</span><select id="selLeituristaTri"><option value="">Todos</option></select></div>
     </div>
 
@@ -188,7 +204,7 @@
     <div class="uploader" id="dropCadastro">
       <div>
         <div style="font-weight:600">Cadastro de Veículos (.xlsx)</div>
-        <div class="up-info">Suba a planilha "InoPrime Veículos" (Placa/Condutor/Tipo/Grupo/Marca). Substitui o cadastro inteiro. Suba de novo sempre que trocar condutor ou placa de algum veículo.</div>
+        <div class="up-info">Suba a planilha "InoPrime Veículos" (Placa/Condutor/Tipo/Grupo/Marca/Proprietário). Substitui o cadastro inteiro. Suba de novo sempre que trocar condutor, placa ou proprietário de algum veículo. Proprietário: "Moto Propria" ou "Moto Locada".</div>
         <div class="up-status" id="statusCadastro"></div>
       </div>
       <div>
@@ -212,6 +228,17 @@
     <div class="uploader" style="display:block">
       <div style="font-weight:600;margin-bottom:6px">Meses já cadastrados no banco</div>
       <div id="mesesCadastrados" class="up-info">Carregando…</div>
+    </div>
+
+    <div class="uploader" style="display:block">
+      <div style="font-weight:600;margin-bottom:10px">Configurar Faixas de Horário</div>
+      <div class="up-info" style="margin-bottom:12px">Define os horários usados pelos filtros "Dentro Horário" e "Fora Horário" no Painel e no Trimestral.</div>
+      <div class="filters" style="margin-bottom:12px">
+        <div class="fg"><span>Dentro Horário — de</span><input type="time" id="cfgDentroDe" value="07:00"><span>até</span><input type="time" id="cfgDentroAte" value="17:00"></div>
+        <div class="fg"><span>Fora Horário — de</span><input type="time" id="cfgForaDe" value="17:00"><span>até</span><input type="time" id="cfgForaAte" value="07:00"></div>
+      </div>
+      <button class="btn-pick" id="btnSalvarHorario">Salvar</button>
+      <div class="up-status" id="statusHorario"></div>
     </div>
   </div>
 
@@ -323,9 +350,31 @@ function converterDataBR(dmy){
 let veiculos={}; // {PLACA:{condutor,tipo,base,marca}}
 
 async function carregarVeiculos(){
-  const {data}=await sb.from('veiculos').select('placa,condutor,tipo,base,marca,matricula');
+  const {data}=await sb.from('veiculos').select('placa,condutor,tipo,base,marca,matricula,proprietario');
   veiculos={};
   (data||[]).forEach(v=>{veiculos[v.placa]=v;});
+}
+
+let CONFIG_HORARIO={dentro_de:'07:00',dentro_ate:'17:00',fora_de:'17:00',fora_ate:'07:00'};
+async function carregarConfigHorario(){
+  const {data}=await sb.from('km_horario_config').select('*').eq('id',1).single();
+  if(data){
+    CONFIG_HORARIO={dentro_de:data.dentro_de,dentro_ate:data.dentro_ate,fora_de:data.fora_de,fora_ate:data.fora_ate};
+    $('cfgDentroDe').value=data.dentro_de.slice(0,5);
+    $('cfgDentroAte').value=data.dentro_ate.slice(0,5);
+    $('cfgForaDe').value=data.fora_de.slice(0,5);
+    $('cfgForaAte').value=data.fora_ate.slice(0,5);
+  }
+}
+function faixaHorarioAtiva(){
+  if(modoHorario==='dentro') return {de:horaParaMin(CONFIG_HORARIO.dentro_de),ate:horaParaMin(CONFIG_HORARIO.dentro_ate)};
+  if(modoHorario==='fora') return {de:horaParaMin(CONFIG_HORARIO.fora_de),ate:horaParaMin(CONFIG_HORARIO.fora_ate)};
+  return {de:horaParaMin($('horaDe').value||'07:30'),ate:horaParaMin($('horaAte').value||'17:30')};
+}
+function faixaHorarioAtivaTri(){
+  if(modoHorarioTri==='dentro') return {de:horaParaMin(CONFIG_HORARIO.dentro_de),ate:horaParaMin(CONFIG_HORARIO.dentro_ate)};
+  if(modoHorarioTri==='fora') return {de:horaParaMin(CONFIG_HORARIO.fora_de),ate:horaParaMin(CONFIG_HORARIO.fora_ate)};
+  return {de:horaParaMin($('horaDeTri').value||'07:30'),ate:horaParaMin($('horaAteTri').value||'17:30')};
 }
 
 function nomeExibicao(placa){
@@ -338,12 +387,14 @@ let registros=[]; // {placa,base,data,horaMin,kmRodado} do mês selecionado, já
 let exclusoesInvalidados=[], exclusoesIndividuais=[];
 let mesSel=null;
 let modoData='todas', dataPersonalizada=null, baseSel='', leiturSel='', buscaTxt='';
+let modoHorario='personalizado', proprietarioSel='';
 let selVeiculo=null;
 let rankChart=null;
 
 // ── TRIMESTRAL ──────────────────────────────────────────────────────
 const MESES_ABREV=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 let registrosTri=[], triBaseSel='', triLeiturSel='', triMesesNomes=[], triMesesRefs=[];
+let modoHorarioTri='personalizado', triProprietarioSel='';
 let leiturasPorMatriculaMes={}; // matricula -> [{gd,rural,localidade,urbano}, ...] alinhado com triMesesRefs
 
 function horaParaMin(hhmmss){ const p=hhmmss.split(':').map(Number); return (p[0]||0)*60+(p[1]||0); }
@@ -422,14 +473,19 @@ function construirFiltros(){
   const condutores=[...new Set(registros.map(r=>veiculos[r.placa]?.condutor).filter(Boolean))].sort();
   $('selLeiturista').innerHTML='<option value="">Todos</option>'+condutores.map(c=>`<option value="${c}">${c}</option>`).join('');
   leiturSel='';
+
+  const proprietarios=[...new Set(registros.map(r=>veiculos[r.placa]?.proprietario).filter(Boolean))].sort();
+  $('selProprietario').innerHTML='<option value="">Todos</option>'+proprietarios.map(p=>`<option value="${p}">${p}</option>`).join('');
+  proprietarioSel='';
 }
 
 function escopo(){
-  const de=horaParaMin($('horaDe').value||'07:30'), ate=horaParaMin($('horaAte').value||'17:30');
+  const {de,ate}=faixaHorarioAtiva();
   return registros.filter(r=>{
     if(baseSel && normBase(r.base)!==normBase(baseSel)) return false;
     if(modoData==='personalizar' && dataPersonalizada && r.data!==dataPersonalizada) return false;
     if(!dentroDoIntervalo(r.horaMin,de,ate)) return false;
+    if(proprietarioSel && (veiculos[r.placa]?.proprietario||'')!==proprietarioSel) return false;
     if(leiturSel && (veiculos[r.placa]?.condutor||'')!==leiturSel) return false;
     return true;
   });
@@ -629,13 +685,18 @@ function construirFiltrosTrimestre(){
   const condutores=[...new Set(registrosTri.map(r=>veiculos[r.placa]?.condutor).filter(Boolean))].sort();
   $('selLeituristaTri').innerHTML='<option value="">Todos</option>'+condutores.map(c=>`<option value="${c}">${c}</option>`).join('');
   triLeiturSel='';
+
+  const proprietarios=[...new Set(registrosTri.map(r=>veiculos[r.placa]?.proprietario).filter(Boolean))].sort();
+  $('selProprietarioTri').innerHTML='<option value="">Todos</option>'+proprietarios.map(p=>`<option value="${p}">${p}</option>`).join('');
+  triProprietarioSel='';
 }
 
 function escopoTri(){
-  const de=horaParaMin($('horaDeTri').value||'07:30'), ate=horaParaMin($('horaAteTri').value||'17:30');
+  const {de,ate}=faixaHorarioAtivaTri();
   return registrosTri.filter(r=>{
     if(triBaseSel && normBase(r.base)!==normBase(triBaseSel)) return false;
     if(!dentroDoIntervalo(r.horaMin,de,ate)) return false;
+    if(triProprietarioSel && (veiculos[r.placa]?.proprietario||'')!==triProprietarioSel) return false;
     if(triLeiturSel && (veiculos[r.placa]?.condutor||'')!==triLeiturSel) return false;
     return true;
   });
@@ -712,6 +773,8 @@ $('selMes').onchange=async()=>{ if($('selMes').value) await selecionarMes($('sel
 $('selModoData').onchange=()=>{ modoData=$('selModoData').value; $('fgDataPersonalizada').style.display=modoData==='personalizar'?'flex':'none'; render(); };
 $('dataPersonalizada').onchange=()=>{dataPersonalizada=$('dataPersonalizada').value;render();};
 $('horaDe').onchange=render; $('horaAte').onchange=render;
+$('selModoHorario').onchange=()=>{ modoHorario=$('selModoHorario').value; $('fgHorarioPersonalizado').style.display=modoHorario==='personalizado'?'flex':'none'; render(); };
+$('selProprietario').onchange=()=>{proprietarioSel=$('selProprietario').value;render();};
 $('selLeiturista').onchange=()=>{leiturSel=$('selLeiturista').value;render();};
 $('busca').oninput=()=>{buscaTxt=$('busca').value.trim().toLowerCase();render();};
 
@@ -719,7 +782,18 @@ $('selMesDeTri').onchange=carregarPeriodo;
 $('selMesAteTri').onchange=carregarPeriodo;
 $('selBaseTri').onchange=()=>{triBaseSel=$('selBaseTri').value;renderTrimestre();};
 $('horaDeTri').onchange=renderTrimestre; $('horaAteTri').onchange=renderTrimestre;
+$('selModoHorarioTri').onchange=()=>{ modoHorarioTri=$('selModoHorarioTri').value; $('fgHorarioPersonalizadoTri').style.display=modoHorarioTri==='personalizado'?'flex':'none'; renderTrimestre(); };
+$('selProprietarioTri').onchange=()=>{triProprietarioSel=$('selProprietarioTri').value;renderTrimestre();};
 $('selLeituristaTri').onchange=()=>{triLeiturSel=$('selLeituristaTri').value;renderTrimestre();};
+
+$('btnSalvarHorario').onclick=async()=>{
+  const payload={id:1,dentro_de:$('cfgDentroDe').value,dentro_ate:$('cfgDentroAte').value,fora_de:$('cfgForaDe').value,fora_ate:$('cfgForaAte').value,atualizado_em:new Date().toISOString()};
+  const {error}=await sb.from('km_horario_config').upsert(payload);
+  if(error){ $('statusHorario').innerHTML='<span style="color:var(--limit)">Falha: '+error.message+'</span>'; return; }
+  CONFIG_HORARIO={dentro_de:payload.dentro_de,dentro_ate:payload.dentro_ate,fora_de:payload.fora_de,fora_ate:payload.fora_ate};
+  $('statusHorario').textContent='✅ Faixas de horário salvas.';
+  render(); renderTrimestre();
+};
 
 // ── ADMINISTRAÇÃO: CADASTRO DE VEÍCULOS ─────────────────────────────
 function lerArquivoCadastro(file){
@@ -740,7 +814,8 @@ function lerArquivoCadastro(file){
           condutor: row[1]!=null?String(row[1]).trim():'',
           tipo: row[2]!=null?String(row[2]).trim():'',
           base: row[3]!=null?String(row[3]).trim():'',
-          marca: row[4]!=null?String(row[4]).trim():''
+          marca: row[4]!=null?String(row[4]).trim():'',
+          proprietario: row[5]!=null?String(row[5]).trim():''
         });
       }
       if(!novos.length) throw new Error('Nenhum veículo reconhecido na planilha.');
@@ -871,7 +946,7 @@ async function popularSelMes(){
     carregarMesesCadastrados();
   }
 
-  await carregarVeiculos();
+  await Promise.all([carregarVeiculos(), carregarConfigHorario()]);
   const meses=await popularSelMes();
   if(meses.length){
     $('dash').style.display='flex';
