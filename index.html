@@ -117,12 +117,10 @@
           <div class="fg" id="fgDataPersonalizada" style="display:none"><input type="date" id="dataPersonalizada"></div>
           <div class="fg"><span>Horário</span>
             <select id="selModoHorario">
-              <option value="personalizado">Personalizado</option>
               <option value="dentro">Dentro Horário</option>
               <option value="fora">Fora Horário</option>
             </select>
           </div>
-          <div class="fg" id="fgHorarioPersonalizado"><input type="time" id="horaDe" value="07:30"><span>até</span><input type="time" id="horaAte" value="17:30"></div>
           <div class="fg"><span>Proprietário</span><select id="selProprietario"><option value="">Todos</option></select></div>
           <div class="fg"><span>Tipo</span><select id="selTipo"><option value="">Todos</option></select></div>
           <div class="fg"><span>Leiturista</span><select id="selLeiturista"><option value="">Todos</option></select></div>
@@ -179,12 +177,10 @@
       <div class="fg" id="fgBaseTri"><span>Base</span><select id="selBaseTri"></select></div>
       <div class="fg"><span>Horário</span>
         <select id="selModoHorarioTri">
-          <option value="personalizado">Personalizado</option>
           <option value="dentro">Dentro Horário</option>
           <option value="fora">Fora Horário</option>
         </select>
       </div>
-      <div class="fg" id="fgHorarioPersonalizadoTri"><input type="time" id="horaDeTri" value="07:30"><span>até</span><input type="time" id="horaAteTri" value="17:30"></div>
       <div class="fg"><span>Proprietário</span><select id="selProprietarioTri"><option value="">Todos</option></select></div>
       <div class="fg"><span>Tipo</span><select id="selTipoTri"><option value="">Todos</option></select></div>
       <div class="fg"><span>Leiturista</span><select id="selLeituristaTri"><option value="">Todos</option></select></div>
@@ -369,14 +365,12 @@ async function carregarConfigHorario(){
   }
 }
 function faixaHorarioAtiva(){
-  if(modoHorario==='dentro') return {de:horaParaMin(CONFIG_HORARIO.dentro_de),ate:horaParaMin(CONFIG_HORARIO.dentro_ate)};
   if(modoHorario==='fora') return {de:horaParaMin(CONFIG_HORARIO.fora_de),ate:horaParaMin(CONFIG_HORARIO.fora_ate)};
-  return {de:horaParaMin($('horaDe').value||'07:30'),ate:horaParaMin($('horaAte').value||'17:30')};
+  return {de:horaParaMin(CONFIG_HORARIO.dentro_de),ate:horaParaMin(CONFIG_HORARIO.dentro_ate)};
 }
 function faixaHorarioAtivaTri(){
-  if(modoHorarioTri==='dentro') return {de:horaParaMin(CONFIG_HORARIO.dentro_de),ate:horaParaMin(CONFIG_HORARIO.dentro_ate)};
   if(modoHorarioTri==='fora') return {de:horaParaMin(CONFIG_HORARIO.fora_de),ate:horaParaMin(CONFIG_HORARIO.fora_ate)};
-  return {de:horaParaMin($('horaDeTri').value||'07:30'),ate:horaParaMin($('horaAteTri').value||'17:30')};
+  return {de:horaParaMin(CONFIG_HORARIO.dentro_de),ate:horaParaMin(CONFIG_HORARIO.dentro_ate)};
 }
 
 function nomeExibicao(placa){
@@ -396,14 +390,14 @@ let registros=[]; // {placa,base,data,horaMin,kmRodado} do mês selecionado, já
 let exclusoesInvalidados=[], exclusoesIndividuais=[];
 let mesSel=null;
 let modoData='todas', dataPersonalizada=null, baseSel='', leiturSel='', buscaTxt='';
-let modoHorario='personalizado', proprietarioSel='', tipoSel='';
+let modoHorario='dentro', proprietarioSel='', tipoSel='';
 let selVeiculo=null;
 let rankChart=null;
 
 // ── TRIMESTRAL ──────────────────────────────────────────────────────
 const MESES_ABREV=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 let registrosTri=[], triBaseSel='', triLeiturSel='', triMesesNomes=[], triMesesRefs=[];
-let modoHorarioTri='personalizado', triProprietarioSel='', triTipoSel='';
+let modoHorarioTri='dentro', triProprietarioSel='', triTipoSel='';
 let leiturasPorMatriculaMes={}; // matricula -> [{gd,rural,localidade,urbano}, ...] alinhado com triMesesRefs
 
 function horaParaMin(hhmmss){ const p=hhmmss.split(':').map(Number); return (p[0]||0)*60+(p[1]||0); }
@@ -803,8 +797,7 @@ $('selBase').onchange=()=>{baseSel=$('selBase').value;render();};
 $('selMes').onchange=async()=>{ if($('selMes').value) await selecionarMes($('selMes').value); };
 $('selModoData').onchange=()=>{ modoData=$('selModoData').value; $('fgDataPersonalizada').style.display=modoData==='personalizar'?'flex':'none'; render(); };
 $('dataPersonalizada').onchange=()=>{dataPersonalizada=$('dataPersonalizada').value;render();};
-$('horaDe').onchange=render; $('horaAte').onchange=render;
-$('selModoHorario').onchange=()=>{ modoHorario=$('selModoHorario').value; $('fgHorarioPersonalizado').style.display=modoHorario==='personalizado'?'flex':'none'; render(); };
+$('selModoHorario').onchange=()=>{ modoHorario=$('selModoHorario').value; render(); };
 $('selProprietario').onchange=()=>{proprietarioSel=$('selProprietario').value;render();};
 $('selTipo').onchange=()=>{tipoSel=$('selTipo').value;render();};
 $('selLeiturista').onchange=()=>{leiturSel=$('selLeiturista').value;render();};
@@ -813,8 +806,7 @@ $('busca').oninput=()=>{buscaTxt=$('busca').value.trim().toLowerCase();render();
 $('selMesDeTri').onchange=carregarPeriodo;
 $('selMesAteTri').onchange=carregarPeriodo;
 $('selBaseTri').onchange=()=>{triBaseSel=$('selBaseTri').value;renderTrimestre();};
-$('horaDeTri').onchange=renderTrimestre; $('horaAteTri').onchange=renderTrimestre;
-$('selModoHorarioTri').onchange=()=>{ modoHorarioTri=$('selModoHorarioTri').value; $('fgHorarioPersonalizadoTri').style.display=modoHorarioTri==='personalizado'?'flex':'none'; renderTrimestre(); };
+$('selModoHorarioTri').onchange=()=>{ modoHorarioTri=$('selModoHorarioTri').value; renderTrimestre(); };
 $('selProprietarioTri').onchange=()=>{triProprietarioSel=$('selProprietarioTri').value;renderTrimestre();};
 $('selTipoTri').onchange=()=>{triTipoSel=$('selTipoTri').value;renderTrimestre();};
 $('selLeituristaTri').onchange=()=>{triLeiturSel=$('selLeituristaTri').value;renderTrimestre();};
