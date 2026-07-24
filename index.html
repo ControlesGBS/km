@@ -827,7 +827,7 @@ $('btnSalvarHorario').onclick=async()=>{
 // "Grupo" é aceito como sinônimo de "Base" (é o nome que a InoPrime usa pra isso).
 const MAPA_CABECALHOS_VEICULOS={
   'placa':'placa',
-  'condutor':'condutor',
+  'condutor':'condutor','leiturista':'condutor',
   'tipo':'tipo',
   'base':'base','grupo':'base',
   'marca':'marca',
@@ -835,6 +835,13 @@ const MAPA_CABECALHOS_VEICULOS={
 };
 function normalizarCabecalho(s){
   return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
+}
+
+// O nome do condutor vem prefixado com "GBS - " na planilha (convenção interna
+// da InoPrime pra marcar de qual empresa é o motorista) -- no sistema isso é
+// ruído, então tira na hora de importar.
+function limparNomeCondutor(s){
+  return String(s||'').replace(/^GBS\s*-\s*/i,'').trim();
 }
 
 function lerArquivoCadastro(file){
@@ -866,7 +873,7 @@ function lerArquivoCadastro(file){
         const placa=valor(row,'placa').toUpperCase(); if(!placa) continue;
         novos.push({
           placa,
-          condutor: valor(row,'condutor'),
+          condutor: limparNomeCondutor(valor(row,'condutor')),
           tipo: valor(row,'tipo'),
           base: valor(row,'base'),
           marca: valor(row,'marca'),
