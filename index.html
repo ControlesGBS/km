@@ -825,6 +825,17 @@ $('btnSalvarHorario').onclick=async()=>{
 // Data Criação, Produtos/Mensalidade, Ações...) em posições que variam de upload
 // pra upload -- por isso a leitura é por NOME do cabeçalho, não por posição fixa.
 // "Grupo" é aceito como sinônimo de "Base" (é o nome que a InoPrime usa pra isso).
+
+// A InoPrime as vezes exporta com caracteres invisiveis (zero-width space/joiner,
+// BOM) grudados no valor -- filtra por codigo de caractere pra nao sobrar lixo
+// escondido em Marca/Condutor/etc (comparar por code point evita problema de
+// encoding que um regex com esses caracteres literais causaria no arquivo).
+function limparInvisiveis(s){
+  return String(s).split('').filter(ch=>{
+    const code=ch.charCodeAt(0);
+    return !(code>=0x200B && code<=0x200D) && code!==0xFEFF;
+  }).join('');
+}
 function normalizarCabecalho(s){
   return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
 }
@@ -832,12 +843,15 @@ function normalizarCabecalho(s){
 // Usa "contém" em vez de comparação exata pros campos que costumam vir com
 // palavras a mais no cabeçalho (ex: "Nome do Leiturista", "Leiturista
 // Responsável", "Motorista Atual") -- comparação exata quebrava toda vez que
-// a InoPrime mudava levemente o texto do cabeçalho.
+// a InoPrime mudava levemente o texto do cabeçalho. "Descrição" também conta
+// como condutor -- a planilha real da InoPrime não tem coluna "Condutor"
+// nenhuma, o nome do motorista vem dentro da própria "Descrição" (ex: "GBS -
+// FULANO DE TAL").
 function detectarCampoVeiculo(header){
   const h=normalizarCabecalho(header);
   if(!h) return null;
   if(h==='placa') return 'placa';
-  if(h.includes('condutor')||h.includes('leiturista')||h.includes('motorista')) return 'condutor';
+  if(h.includes('condutor')||h.includes('leiturista')||h.includes('motorista')||h.includes('descricao')) return 'condutor';
   if(h==='tipo') return 'tipo';
   if(h==='base'||h==='grupo') return 'base';
   if(h==='marca') return 'marca';
@@ -873,7 +887,9 @@ function lerArquivoCadastro(file){
       }
       if(linhaCab===-1) throw new Error('Não encontrei a coluna "Placa" na planilha.');
 
-      const valor=(row,campo)=> colunas[campo]!=null && row[colunas[campo]]!=null ? String(row[colunas[campo]]).trim() : '';
+      // A InoPrime as vezes exporta com caracteres invisiveis (zero-width) grudados
+      // no valor -- limpa isso pra nao virar lixo escondido em Marca/Condutor/etc.
+      const valor=(row,campo)=> colunas[campo]!=null && row[colunas[campo]]!=null ? limparInvisiveis(String(row[colunas[campo]])).trim() : '';
 
       const novos=[];
       for(let i=linhaCab+1;i<rows.length;i++){
