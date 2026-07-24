@@ -825,16 +825,24 @@ $('btnSalvarHorario').onclick=async()=>{
 // Data Criação, Produtos/Mensalidade, Ações...) em posições que variam de upload
 // pra upload -- por isso a leitura é por NOME do cabeçalho, não por posição fixa.
 // "Grupo" é aceito como sinônimo de "Base" (é o nome que a InoPrime usa pra isso).
-const MAPA_CABECALHOS_VEICULOS={
-  'placa':'placa',
-  'condutor':'condutor','leiturista':'condutor',
-  'tipo':'tipo',
-  'base':'base','grupo':'base',
-  'marca':'marca',
-  'proprietario':'proprietario'
-};
 function normalizarCabecalho(s){
   return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
+}
+
+// Usa "contém" em vez de comparação exata pros campos que costumam vir com
+// palavras a mais no cabeçalho (ex: "Nome do Leiturista", "Leiturista
+// Responsável", "Motorista Atual") -- comparação exata quebrava toda vez que
+// a InoPrime mudava levemente o texto do cabeçalho.
+function detectarCampoVeiculo(header){
+  const h=normalizarCabecalho(header);
+  if(!h) return null;
+  if(h==='placa') return 'placa';
+  if(h.includes('condutor')||h.includes('leiturista')||h.includes('motorista')) return 'condutor';
+  if(h==='tipo') return 'tipo';
+  if(h==='base'||h==='grupo') return 'base';
+  if(h==='marca') return 'marca';
+  if(h.includes('proprietario')) return 'proprietario';
+  return null;
 }
 
 // O nome do condutor vem prefixado com "GBS - " na planilha (convenção interna
@@ -858,7 +866,7 @@ function lerArquivoCadastro(file){
         const row=rows[i]; if(!row) continue;
         const idx={};
         row.forEach((cel,c)=>{
-          const campo=MAPA_CABECALHOS_VEICULOS[normalizarCabecalho(cel)];
+          const campo=detectarCampoVeiculo(cel);
           if(campo) idx[campo]=c;
         });
         if(idx.placa!=null){ linhaCab=i; colunas=idx; break; }
@@ -888,7 +896,14 @@ function lerArquivoCadastro(file){
       const ins=await sb.from('veiculos').insert(novos);
       if(ins.error) throw ins.error;
 
-      $('statusCadastro').innerHTML=`✅ Cadastro atualizado: <b>${novos.length}</b> veículo(s).`;
+      let resumoCadastro=`✅ Cadastro atualizado: <b>${novos.length}</b> veículo(s).`;
+      if(colunas.condutor==null){
+        resumoCadastro+=' <span style="color:var(--limit)">Não encontrei a coluna de condutor/leiturista na planilha — nenhum veículo ficou com condutor.</span>';
+      }else{
+        const comCondutor=novos.filter(v=>v.condutor).length;
+        if(comCondutor===0) resumoCadastro+=' <span style="color:var(--limit)">A coluna de condutor foi encontrada, mas veio vazia em todas as linhas.</span>';
+      }
+      $('statusCadastro').innerHTML=resumoCadastro;
       await carregarVeiculos();
       construirFiltros(); render();
       registrarUploadSupabase('km_cadastro');
