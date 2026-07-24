@@ -123,7 +123,7 @@
           </div>
           <div class="fg"><span>Proprietário</span><select id="selProprietario"><option value="">Todos</option></select></div>
           <div class="fg"><span>Tipo</span><select id="selTipo"><option value="">Todos</option></select></div>
-          <div class="fg"><span>Leiturista</span><select id="selLeiturista"><option value="">Todos</option></select></div>
+          <div class="fg"><span>Condutor</span><select id="selLeiturista"><option value="">Todos</option></select></div>
           <div class="fg"><span>Buscar</span><input type="search" id="busca" placeholder="placa ou nome..."></div>
         </div>
 
@@ -183,7 +183,7 @@
       </div>
       <div class="fg"><span>Proprietário</span><select id="selProprietarioTri"><option value="">Todos</option></select></div>
       <div class="fg"><span>Tipo</span><select id="selTipoTri"><option value="">Todos</option></select></div>
-      <div class="fg"><span>Leiturista</span><select id="selLeituristaTri"><option value="">Todos</option></select></div>
+      <div class="fg"><span>Condutor</span><select id="selLeituristaTri"><option value="">Todos</option></select></div>
     </div>
 
     <div class="card">
@@ -716,7 +716,7 @@ function escopoTri(){
 }
 
 function renderTrimestre(){
-  $('theadTri').innerHTML=`<th></th><th>Leiturista</th><th>Placa</th><th>Base</th>${triMesesNomes.map(n=>`<th>${n}</th>`).join('')}<th class="tot">Total</th>`;
+  $('theadTri').innerHTML=`<th></th><th>Condutor</th><th>Placa</th><th>Base</th>${triMesesNomes.map(n=>`<th>${n}</th>`).join('')}<th class="tot">Total</th>`;
 
   const porVeiculo={};
   escopoTri().forEach(r=>{
