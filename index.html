@@ -906,6 +906,14 @@ function lerArquivoCadastro(file){
       }
       if(!novos.length) throw new Error('Nenhum veículo reconhecido na planilha.');
 
+      // A planilha não traz matrícula (isso é vinculado à mão em Locação de Motos >
+      // Vinculação) -- guarda o vínculo atual antes de substituir o cadastro, pra
+      // reaplicar depois nas placas que continuarem existindo e não perder o trabalho já feito.
+      const {data:vinculosAntigos}=await sb.from('veiculos').select('placa,matricula').not('matricula','is',null);
+      const matriculaPorPlaca={};
+      (vinculosAntigos||[]).forEach(v=>{ matriculaPorPlaca[v.placa]=v.matricula; });
+      novos.forEach(v=>{ if(matriculaPorPlaca[v.placa]) v.matricula=matriculaPorPlaca[v.placa]; });
+
       $('statusCadastro').textContent='Substituindo o cadastro no banco…';
       const del=await sb.from('veiculos').delete().neq('placa','');
       if(del.error) throw del.error;
@@ -913,6 +921,10 @@ function lerArquivoCadastro(file){
       if(ins.error) throw ins.error;
 
       let resumoCadastro=`✅ Cadastro atualizado: <b>${novos.length}</b> veículo(s).`;
+      const vinculosPreservados=novos.filter(v=>v.matricula).length;
+      if(Object.keys(matriculaPorPlaca).length){
+        resumoCadastro+=` <b>${vinculosPreservados}</b> de <b>${Object.keys(matriculaPorPlaca).length}</b> vínculo(s) de matrícula (Locação de Motos) foram mantidos.`;
+      }
       if(colunas.condutor==null){
         resumoCadastro+=' <span style="color:var(--limit)">Não encontrei a coluna de condutor/leiturista na planilha — nenhum veículo ficou com condutor.</span>';
       }else{
